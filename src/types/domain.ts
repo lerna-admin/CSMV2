@@ -52,6 +52,17 @@ export type SeoConfig = {
   ogImage?: string;
 };
 
+export type SiteTheme = {
+  name: string;
+  primary: string;
+  accent: string;
+  background: string;
+  surface: string;
+  text: string;
+  font: string;
+  radius: number;
+};
+
 export type SiteVersion = {
   id: string;
   createdAt: string;
@@ -90,6 +101,7 @@ export type SiteProject = {
   updatedAt: string;
   blocks: SiteBlock[];
   seo: SeoConfig;
+  theme?: SiteTheme;
   versions: SiteVersion[];
   publishTarget: 'staging' | 'production';
 };

@@ -6,20 +6,23 @@ export default function PublicSite() {
   const { slug = '' } = useParams();
   const [sent, setSent] = useState(false);
   const site = useMemo(() => getProjects().find((p) => p.slug === slug && p.status === 'published') || null, [slug]);
-
-  if (!site) return <main className="public-site"><h1>Sitio no disponible</h1></main>;
-  const hasTree = site.blocks.some((b) => b.nodeType || b.type === 'section');
-  const sections = hasTree ? site.blocks.filter((b) => b.nodeType === 'section' || b.type === 'section') : [];
-  const looseBlocks = hasTree ? [] : site.blocks;
+  const blocks = site?.blocks || [];
+  const hasTree = blocks.some((b) => b.nodeType || b.type === 'section');
+  const sections = hasTree ? blocks.filter((b) => b.nodeType === 'section' || b.type === 'section') : [];
+  const looseBlocks = hasTree ? [] : blocks;
   const pages = Array.from(new Map(sections.map((s) => [s.pageId || 'home', s.pageName || 'Home'])).entries()).map(([id, name]) => ({ id, name }));
   const [activePage, setActivePage] = useState(pages[0]?.id || 'home');
+  const theme = site?.theme;
 
   useEffect(() => {
+    if (!site) return;
     const scripts = site.blocks.map((b) => b.customJs).filter(Boolean);
     for (const code of scripts) {
       try { new Function(String(code))(); } catch { /* ignore invalid user snippets */ }
     }
-  }, [site.blocks]);
+  }, [site]);
+
+  if (!site) return <main className="public-site"><h1>Sitio no disponible</h1></main>;
 
   function submitLead(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -40,7 +43,14 @@ export default function PublicSite() {
   }
 
   return (
-    <main className="public-site">
+    <main
+      className="public-site"
+      style={theme ? {
+        background: theme.background,
+        color: theme.text,
+        fontFamily: theme.font,
+      } : undefined}
+    >
       {pages.length > 1 && <nav className="nav-inline">{pages.map((p) => <button key={p.id} type="button" onClick={() => setActivePage(p.id)}>{p.name}</button>)}</nav>}
       {sections.map((section) => (
         <section key={section.id} className={`b-section ${section.customClass || ''}`} style={{ display: (section.pageId || 'home') === activePage ? 'block' : 'none' }}>

@@ -3,11 +3,28 @@ import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import Builder from '../components/Builder';
 import { currentUser } from '../lib/auth';
 import { clearSession, getAgents, getLeads, getProjects, getSettings, getTemplates, getUsers, issueUrl, saveSettings, upsertAgent, upsertProject, upsertTemplate } from '../lib/storage';
-import type { SeoConfig, SiteBlock, SiteProject } from '../types/domain';
+import type { SeoConfig, SiteBlock, SiteProject, SiteTheme } from '../types/domain';
 import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
 const COLORS = ['#1e40af', '#16a34a', '#ea580c'];
 const baseSeo: SeoConfig = { title: 'CSMV2 Site', description: 'Sitio creado con CSMV2', keywords: ['csmv2'] };
+const baseTheme: SiteTheme = {
+  name: 'Studio Clean',
+  primary: '#006edc',
+  accent: '#d94f30',
+  background: '#f7f1e8',
+  surface: '#ffffff',
+  text: '#141414',
+  font: 'Aptos, Segoe UI, sans-serif',
+  radius: 8,
+};
+
+const themePresets: SiteTheme[] = [
+  baseTheme,
+  { name: 'Editorial Pro', primary: '#1f2937', accent: '#b6862c', background: '#f8f1e7', surface: '#fffaf3', text: '#1f2937', font: 'Georgia, serif', radius: 4 },
+  { name: 'SaaS Sharp', primary: '#075985', accent: '#16a34a', background: '#eef6ff', surface: '#ffffff', text: '#0f172a', font: 'Aptos, Segoe UI, sans-serif', radius: 14 },
+  { name: 'Creative Dark', primary: '#ffffff', accent: '#f97316', background: '#111827', surface: '#1f2937', text: '#f9fafb', font: 'Trebuchet MS, sans-serif', radius: 12 },
+];
 
 function TemplatePreview({ blocks }: { blocks: SiteBlock[] }) {
   return (
@@ -68,6 +85,7 @@ export default function AppShell() {
       updatedAt: new Date().toISOString(),
       blocks: [],
       seo: baseSeo,
+      theme: baseTheme,
       versions: [],
       publishTarget: 'production',
     };
@@ -77,6 +95,7 @@ export default function AppShell() {
   }
 
   const project = ensureProject();
+  const projectTheme = project.theme || baseTheme;
 
   function persist(next: SiteProject) {
     setHistory((h) => [...h, project]);
@@ -166,7 +185,29 @@ export default function AppShell() {
                 </div>
               </section>
 
-              <Builder blocks={project.blocks} onChange={(blocks) => persist({ ...project, blocks, updatedAt: new Date().toISOString() })} />
+              <section className="theme-panel">
+                <div>
+                  <h3>Tema global</h3>
+                  <p>{projectTheme.name}</p>
+                </div>
+                <div className="theme-presets">
+                  {themePresets.map((theme) => (
+                    <button key={theme.name} type="button" onClick={() => persist({ ...project, theme, updatedAt: new Date().toISOString() })}>
+                      <span style={{ background: theme.primary }} />
+                      <span style={{ background: theme.accent }} />
+                      {theme.name}
+                    </button>
+                  ))}
+                </div>
+                <div className="theme-grid">
+                  <label>Primario<input type="color" value={projectTheme.primary} onChange={(e) => persist({ ...project, theme: { ...projectTheme, primary: e.target.value }, updatedAt: new Date().toISOString() })} /></label>
+                  <label>Acento<input type="color" value={projectTheme.accent} onChange={(e) => persist({ ...project, theme: { ...projectTheme, accent: e.target.value }, updatedAt: new Date().toISOString() })} /></label>
+                  <label>Fondo<input type="color" value={projectTheme.background} onChange={(e) => persist({ ...project, theme: { ...projectTheme, background: e.target.value }, updatedAt: new Date().toISOString() })} /></label>
+                  <label>Texto<input type="color" value={projectTheme.text} onChange={(e) => persist({ ...project, theme: { ...projectTheme, text: e.target.value }, updatedAt: new Date().toISOString() })} /></label>
+                </div>
+              </section>
+
+              <Builder blocks={project.blocks} theme={projectTheme} onChange={(blocks) => persist({ ...project, blocks, updatedAt: new Date().toISOString() })} />
 
               <section className="templates">
                 <h3>Plantillas disponibles (compartidas)</h3>
@@ -193,7 +234,7 @@ export default function AppShell() {
                 <button type="button" onClick={saveSharedTemplate}>Guardar plantilla compartida</button>
               </div>
               <div className="template-studio-grid">
-                <Builder blocks={templateBlocks} onChange={setTemplateBlocks} />
+                <Builder blocks={templateBlocks} theme={baseTheme} onChange={setTemplateBlocks} />
                 <TemplatePreview blocks={templateBlocks} />
               </div>
             </section>

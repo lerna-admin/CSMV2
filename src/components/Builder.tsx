@@ -1,10 +1,11 @@
-import { Copy, Eye, Layers, Monitor, Palette, Plus, Smartphone, Tablet, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, Copy, Eye, Layers, Monitor, Palette, Plus, Smartphone, Tablet, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import type { SiteBlock } from '../types/domain';
+import type { SiteBlock, SiteTheme } from '../types/domain';
 
 type Props = {
   blocks: SiteBlock[];
   onChange: (blocks: SiteBlock[]) => void;
+  theme?: SiteTheme;
 };
 
 type PaletteItem = Omit<SiteBlock, 'id' | 'parentId' | 'nodeType'>;
@@ -56,6 +57,15 @@ function updateBlock(blocks: SiteBlock[], id: string, patch: Partial<SiteBlock>)
   return blocks.map((b) => (b.id === id ? { ...b, ...patch } : b));
 }
 
+function parseCssText(css?: string): React.CSSProperties | undefined {
+  if (!css) return undefined;
+  const entries = css
+    .split(';')
+    .map((rule) => rule.split(':').map((part) => part.trim()))
+    .filter((rule) => rule.length >= 2 && rule[0]);
+  return Object.fromEntries(entries.map(([key, ...value]) => [key, value.join(':')])) as React.CSSProperties;
+}
+
 function cloneWithChildren(blocks: SiteBlock[], source: SiteBlock): SiteBlock[] {
   const newId = crypto.randomUUID();
   const cloned = { ...source, id: newId, title: `${source.title} copia` };
@@ -64,7 +74,7 @@ function cloneWithChildren(blocks: SiteBlock[], source: SiteBlock): SiteBlock[] 
   return blocks.concat(cloned, ...children);
 }
 
-export default function Builder({ blocks, onChange }: Props) {
+export default function Builder({ blocks, onChange, theme }: Props) {
   const [selectedId, setSelectedId] = useState<string>('');
   const [device, setDevice] = useState<DeviceMode>('desktop');
   const normalized = useMemo(() => toBuilderShape(blocks), [blocks]);
@@ -84,6 +94,20 @@ export default function Builder({ blocks, onChange }: Props) {
       ? normalized.filter((b) => b.id !== id && b.parentId !== id)
       : normalized.filter((b) => b.id !== id);
     setSelectedId('');
+    commit(next);
+  }
+
+  function moveBlock(id: string, direction: -1 | 1) {
+    const index = normalized.findIndex((b) => b.id === id);
+    if (index < 0) return;
+    const target = normalized[index];
+    const peers = normalized.filter((b) => (target.parentId ? b.parentId === target.parentId : b.nodeType === 'section' || b.type === 'section'));
+    const peerIndex = peers.findIndex((b) => b.id === id);
+    const swapPeer = peers[peerIndex + direction];
+    if (!swapPeer) return;
+    const swapIndex = normalized.findIndex((b) => b.id === swapPeer.id);
+    const next = normalized.slice();
+    [next[index], next[swapIndex]] = [next[swapIndex], next[index]];
     commit(next);
   }
 
@@ -176,7 +200,15 @@ export default function Builder({ blocks, onChange }: Props) {
           </div>
         </header>
 
-        <div className="page-frame">
+        <div
+          className="page-frame"
+          style={theme ? {
+            background: theme.surface,
+            color: theme.text,
+            borderRadius: `${theme.radius}px`,
+            fontFamily: theme.font,
+          } : undefined}
+        >
           {sections.length === 0 && <div className="drop-empty">Arrastra una seccion aqui.</div>}
 
           {sections.map((section, index) => {
@@ -185,7 +217,7 @@ export default function Builder({ blocks, onChange }: Props) {
               <article
                 key={section.id}
                 className={`canvas-section ${selectedId === section.id ? 'selected' : ''}`}
-                style={section.customCss ? Object.fromEntries(section.customCss.split(';').map((rule) => rule.split(':').map((part) => part.trim())).filter((rule) => rule.length === 2)) : undefined}
+                style={parseCssText(section.customCss)}
                 onClick={(event) => { event.stopPropagation(); setSelectedId(section.id); }}
                 onDragOver={(event) => event.preventDefault()}
                 onDrop={(event) => onDropSection(event, section.id)}
@@ -193,10 +225,26 @@ export default function Builder({ blocks, onChange }: Props) {
                 <div className="section-head">
                   <strong>Seccion {index + 1}: {section.title}</strong>
                   <div className="mini-actions">
+                    <button type="button" onClick={(event) => { event.stopPropagation(); moveBlock(section.id, -1); }} title="Subir"><ArrowUp size={15} /></button>
+                    <button type="button" onClick={(event) => { event.stopPropagation(); moveBlock(section.id, 1); }} title="Bajar"><ArrowDown size={15} /></button>
                     <button type="button" onClick={(event) => { event.stopPropagation(); commit(cloneWithChildren(normalized, section)); }} title="Duplicar"><Copy size={15} /></button>
                     <button type="button" onClick={(event) => { event.stopPropagation(); removeBlock(section.id); }} title="Eliminar"><Trash2 size={15} /></button>
                   </div>
                 </div>
+                <h2
+                  contentEditable
+                  suppressContentEditableWarning
+                  onBlur={(event) => commit(updateBlock(normalized, section.id, { title: event.currentTarget.textContent || '' }))}
+                >
+                  {section.title}
+                </h2>
+                <p
+                  contentEditable
+                  suppressContentEditableWarning
+                  onBlur={(event) => commit(updateBlock(normalized, section.id, { content: event.currentTarget.textContent || '' }))}
+                >
+                  {section.content}
+                </p>
 
                 <div className="section-children">
                   {items.length === 0 && <div className="drop-empty">Arrastra elementos aqui.</div>}
@@ -209,11 +257,26 @@ export default function Builder({ blocks, onChange }: Props) {
                       <header>
                         <strong>{block.title}</strong>
                         <div className="mini-actions">
+                          <button type="button" onClick={(event) => { event.stopPropagation(); moveBlock(block.id, -1); }} title="Subir"><ArrowUp size={15} /></button>
+                          <button type="button" onClick={(event) => { event.stopPropagation(); moveBlock(block.id, 1); }} title="Bajar"><ArrowDown size={15} /></button>
                           <button type="button" onClick={(event) => { event.stopPropagation(); commit(cloneWithChildren(normalized, block)); }} title="Duplicar"><Copy size={15} /></button>
                           <button type="button" onClick={(event) => { event.stopPropagation(); removeBlock(block.id); }} title="Eliminar"><Trash2 size={15} /></button>
                         </div>
                       </header>
-                      <p>{block.content}</p>
+                      <h3
+                        contentEditable
+                        suppressContentEditableWarning
+                        onBlur={(event) => commit(updateBlock(normalized, block.id, { title: event.currentTarget.textContent || '' }))}
+                      >
+                        {block.title}
+                      </h3>
+                      <p
+                        contentEditable
+                        suppressContentEditableWarning
+                        onBlur={(event) => commit(updateBlock(normalized, block.id, { content: event.currentTarget.textContent || '' }))}
+                      >
+                        {block.content}
+                      </p>
                       {block.buttonText && <span className="fake-button">{block.buttonText}</span>}
                       {block.type === 'gallery' && <div className="mini-gallery">{(block.items || []).slice(0, 3).map((img) => <img key={img} src={img} alt="" />)}</div>}
                     </article>
