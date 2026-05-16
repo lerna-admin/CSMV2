@@ -1,4 +1,4 @@
-import type { FormLead, SiteProject, SiteTemplate, User } from '../types/domain';
+import type { Agent, FormLead, PlatformSettings, SiteProject, SiteTemplate, User } from '../types/domain';
 import { encryptEpe2 } from './epe2';
 
 const KEYS = {
@@ -7,6 +7,8 @@ const KEYS = {
   projects: 'csmv2_projects',
   templates: 'csmv2_templates',
   leads: 'csmv2_leads',
+  agents: 'csmv2_agents',
+  settings: 'csmv2_settings',
 };
 
 function load<T>(key: string, fallback: T): T {
@@ -88,6 +90,28 @@ export function getLeads(): FormLead[] {
 
 export function pushLead(lead: FormLead): void {
   save(KEYS.leads, [lead, ...getLeads()]);
+}
+
+export function getAgents(): Agent[] {
+  return load<Agent[]>(KEYS.agents, []);
+}
+
+export function upsertAgent(agent: Agent): void {
+  const next = getAgents().filter((a) => a.email !== agent.email).concat(agent);
+  save(KEYS.agents, next);
+}
+
+export function getSettings(): PlatformSettings {
+  return load<PlatformSettings>(KEYS.settings, {
+    allowPublicSignup: true,
+    defaultPublishTarget: 'production',
+    updatedAt: new Date().toISOString(),
+    updatedBy: 'system',
+  });
+}
+
+export function saveSettings(settings: PlatformSettings): void {
+  save(KEYS.settings, settings);
 }
 
 export function setSession(email: string): void {

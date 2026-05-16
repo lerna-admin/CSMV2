@@ -1,6 +1,6 @@
 import type { User } from '../types/domain';
 import { decryptEpe2, encryptEpe2 } from './epe2';
-import { getSession, getUsers, setSession, upsertUser } from './storage';
+import { getSession, getUsers, issueUrl, setSession, upsertUser } from './storage';
 
 function normalizeEmail(value: string): string {
   return String(value || '').trim().toLowerCase();
@@ -27,7 +27,7 @@ export function login(email: string, password: string): User | null {
   return user;
 }
 
-export function register(name: string, email: string, password: string): { ok: boolean; error?: string } {
+export function register(name: string, email: string, password: string): { ok: boolean; error?: string; issue?: string } {
   const normalizedEmail = normalizeEmail(email);
   const normalizedPassword = String(password || '').trim();
   const users = getUsers();
@@ -40,5 +40,13 @@ export function register(name: string, email: string, password: string): { ok: b
     createdAt: new Date().toISOString(),
   });
   setSession(normalizedEmail);
-  return { ok: true };
+  return {
+    ok: true,
+    issue: issueUrl('register-user', {
+      name: String(name || '').trim(),
+      email: normalizedEmail,
+      role: 'usuario',
+      createdAt: new Date().toISOString(),
+    }),
+  };
 }

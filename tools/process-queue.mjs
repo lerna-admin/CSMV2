@@ -39,6 +39,13 @@ async function appendJson(filePath, data) {
   await fs.writeFile(filePath, JSON.stringify(arr, null, 2) + '\n', 'utf8');
 }
 
+async function rebuildIndex(dirPath, indexPath) {
+  const files = (await fs.readdir(dirPath).catch(() => []))
+    .filter((name) => name.endsWith('.json'))
+    .sort();
+  await upsertJson(indexPath, { updatedAt: new Date().toISOString(), count: files.length, files });
+}
+
 async function main() {
   const files = await fs.readdir(queueDir).catch(() => []);
   for (const f of files.filter((n) => n.endsWith('.json'))) {
@@ -47,14 +54,25 @@ async function main() {
     const payload = JSON.parse(decryptEpe2(item.payload, `${item.command}.json`));
 
     if (item.command === 'register-user') await upsertJson(path.join(root, 'data', 'users', `${payload.email}.json`), payload);
+    if (item.command === 'create-project') await upsertJson(path.join(root, 'data', 'sites', `${payload.project.slug}.draft.json`), payload.project);
     if (item.command === 'publish-site-production') await upsertJson(path.join(root, 'data', 'sites', `${payload.project.slug}.json`), payload.project);
     if (item.command === 'publish-site-staging') await upsertJson(path.join(root, 'data', 'sites', `${payload.project.slug}.staging.json`), payload.project);
     if (item.command === 'save-template') await upsertJson(path.join(root, 'data', 'templates', `${payload.template.id}.json`), payload.template);
     if (item.command === 'save-version') await appendJson(path.join(root, 'data', 'versions', `${payload.siteSlug}.json`), payload.version);
     if (item.command === 'submit-lead') await appendJson(path.join(root, 'data', 'leads', `${payload.siteSlug}.json`), payload);
+    if (item.command === 'create-agent') await upsertJson(path.join(root, 'data', 'agents', `${payload.agent.email}.json`), payload.agent);
+    if (item.command === 'save-settings') await upsertJson(path.join(root, 'data', 'settings', 'platform.json'), payload.settings);
 
     await fs.unlink(full);
   }
+
+  await rebuildIndex(path.join(root, 'data', 'users'), path.join(root, 'data', 'users', 'index.json'));
+  await rebuildIndex(path.join(root, 'data', 'sites'), path.join(root, 'data', 'sites', 'index.json'));
+  await rebuildIndex(path.join(root, 'data', 'templates'), path.join(root, 'data', 'templates', 'index.json'));
+  await rebuildIndex(path.join(root, 'data', 'versions'), path.join(root, 'data', 'versions', 'index.json'));
+  await rebuildIndex(path.join(root, 'data', 'leads'), path.join(root, 'data', 'leads', 'index.json'));
+  await rebuildIndex(path.join(root, 'data', 'agents'), path.join(root, 'data', 'agents', 'index.json'));
+  await rebuildIndex(path.join(root, 'data', 'settings'), path.join(root, 'data', 'settings', 'index.json'));
 }
 
 main();

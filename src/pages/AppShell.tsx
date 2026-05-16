@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import Builder from '../components/Builder';
 import { currentUser } from '../lib/auth';
-import { clearSession, getLeads, getProjects, getTemplates, getUsers, issueUrl, upsertProject, upsertTemplate } from '../lib/storage';
+import { clearSession, getAgents, getLeads, getProjects, getSettings, getTemplates, getUsers, issueUrl, saveSettings, upsertAgent, upsertProject, upsertTemplate } from '../lib/storage';
 import type { SeoConfig, SiteProject } from '../types/domain';
 import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
@@ -22,6 +22,8 @@ export default function AppShell() {
   const myProject = allProjects.find((p) => p.ownerEmail === actor.email) || null;
   const templates = getTemplates().filter((t) => t.ownerEmail === actor.email || t.publicTemplate);
   const leads = getLeads();
+  const settings = getSettings();
+  const agents = getAgents();
 
   const roleStats = useMemo(() => {
     const users = getUsers();
@@ -50,6 +52,7 @@ export default function AppShell() {
       publishTarget: 'production',
     };
     upsertProject(next);
+    window.open(issueUrl('create-project', { project: next, actor: actor.email }), '_blank', 'noopener,noreferrer');
     return next;
   }
 
@@ -90,6 +93,34 @@ export default function AppShell() {
               <h3>Leads por sitio</h3>
               <ResponsiveContainer width="100%" height={220}><BarChart data={leadsBySite}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" /><YAxis allowDecimals={false} /><Tooltip /><Bar dataKey="v" fill="#22c55e" /></BarChart></ResponsiveContainer>
             </article>
+            <article>
+              <h3>Agentes</h3>
+              <p>{agents.length} agentes activos</p>
+              <button type="button" onClick={() => {
+                const email = prompt('Email del agente');
+                const name = prompt('Nombre del agente');
+                if (!email || !name) return;
+                const agent = { id: crypto.randomUUID(), email: email.trim().toLowerCase(), name: name.trim(), role: 'agente' as const, createdAt: new Date().toISOString(), createdBy: actor.email };
+                upsertAgent(agent);
+                window.open(issueUrl('create-agent', { agent, actor: actor.email }), '_blank', 'noopener,noreferrer');
+                setRefresh((v) => v + 1);
+              }}>Crear agente</button>
+            </article>
+          </div>
+          <div className="seo-grid">
+            <label>
+              <input
+                type="checkbox"
+                checked={settings.allowPublicSignup}
+                onChange={(e) => {
+                  const next = { ...settings, allowPublicSignup: e.target.checked, updatedAt: new Date().toISOString(), updatedBy: actor.email };
+                  saveSettings(next);
+                  window.open(issueUrl('save-settings', { settings: next, actor: actor.email }), '_blank', 'noopener,noreferrer');
+                  setRefresh((v) => v + 1);
+                }}
+              />
+              Permitir registro publico
+            </label>
           </div>
         </section>
       )}

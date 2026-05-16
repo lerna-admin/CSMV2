@@ -17,6 +17,7 @@ CMS visual tipo Wix sin backend tradicional, orientado a publicar sitios en `git
 - Captura de leads en formularios y bandeja de datos.
 - Dashboard admin con graficas de roles, estado de proyectos y leads por sitio.
 - Sitios publicos accesibles por URL (`#/s/<slug>`), sin login.
+- Toda creacion dispara issue y termina en archivos JSON del repo (fuente final).
 
 ## EPE2 (lenguaje operativo)
 
@@ -33,10 +34,13 @@ Toda la automatizacion de payloads sensibles usa **EPE2-only**.
 2. `process-issues.yml` extrae el comando y guarda en `data/queue/issue-<n>.json`.
 3. `apply-queue.yml` procesa la cola y materializa archivos JSON:
    - `data/users/<email>.json`
+   - `data/agents/<email>.json`
    - `data/sites/<slug>.json` y `data/sites/<slug>.staging.json`
    - `data/templates/<template-id>.json`
    - `data/versions/<slug>.json`
    - `data/leads/<slug>.json`
+   - `data/settings/platform.json`
+   - `data/*/index.json` para descubrimiento rapido
 4. `deploy-pages.yml` publica la app en GitHub Pages.
 
 ## Desarrollo

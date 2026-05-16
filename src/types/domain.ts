@@ -8,6 +8,22 @@ export type User = {
   createdAt: string;
 };
 
+export type Agent = {
+  id: string;
+  email: string;
+  name: string;
+  role: 'agente';
+  createdAt: string;
+  createdBy: string;
+};
+
+export type PlatformSettings = {
+  allowPublicSignup: boolean;
+  defaultPublishTarget: 'staging' | 'production';
+  updatedAt: string;
+  updatedBy: string;
+};
+
 export type BlockType = 'hero' | 'text' | 'image' | 'cta' | 'features' | 'navbar' | 'gallery' | 'faq' | 'contactForm';
 
 export type SiteBlock = {
