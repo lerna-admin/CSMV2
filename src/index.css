@@ -32,6 +32,12 @@ input, textarea, select { width: 100%; padding: .62rem .75rem; border: 1px solid
 .inline-fields { display:grid; grid-template-columns: 1fr 1fr; gap:.5rem; }
 .templates, .versions { margin-top: 1rem; }
 .template-list { display:grid; grid-template-columns: repeat(auto-fill,minmax(12rem,1fr)); gap:.6rem; }
+.template-card { background:#f8fbff; border:1px solid #d8e6ff; border-radius:10px; padding:.65rem; display:grid; gap:.45rem; }
+.template-studio { margin-top:1rem; padding:1rem; border:1px solid #dbe7fb; border-radius:12px; background:#f8fbff; }
+.template-head { display:grid; grid-template-columns: 1fr auto; gap:.6rem; margin-bottom:.8rem; }
+.template-studio-grid { display:grid; grid-template-columns: 1.25fr .75fr; gap:.9rem; }
+.template-preview { border:1px solid #d5def0; border-radius:12px; padding:.7rem; background:#fff; display:grid; gap:.6rem; max-height:34rem; overflow:auto; }
+.preview-block { border:1px solid #e2e8f0; border-radius:10px; padding:.6rem; }
 
 .public-site { padding: 1.2rem; max-width: 64rem; margin: 0 auto; }
 .public-site section { margin-bottom: 1rem; padding: 1rem; border-radius: 14px; background:#fff; }
@@ -50,6 +56,7 @@ input, textarea, select { width: 100%; padding: .62rem .75rem; border: 1px solid
   .topbar { align-items:flex-start; flex-direction:column; gap:.7rem; }
   .workspace-head .actions { display:grid; grid-template-columns: repeat(2,minmax(0,1fr)); }
   .inline-fields { grid-template-columns: 1fr; }
+  .template-studio-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 480px) {
   .app-shell, .auth-page { padding: .75rem; margin: 0; }
