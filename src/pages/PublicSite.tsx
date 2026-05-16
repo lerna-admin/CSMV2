@@ -1,4 +1,4 @@
-import { FormEvent, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { getProjects, issueUrl, pushLead } from '../lib/storage';
 
@@ -11,6 +11,15 @@ export default function PublicSite() {
   const hasTree = site.blocks.some((b) => b.nodeType || b.type === 'section');
   const sections = hasTree ? site.blocks.filter((b) => b.nodeType === 'section' || b.type === 'section') : [];
   const looseBlocks = hasTree ? [] : site.blocks;
+  const pages = Array.from(new Map(sections.map((s) => [s.pageId || 'home', s.pageName || 'Home'])).entries()).map(([id, name]) => ({ id, name }));
+  const [activePage, setActivePage] = useState(pages[0]?.id || 'home');
+
+  useEffect(() => {
+    const scripts = site.blocks.map((b) => b.customJs).filter(Boolean);
+    for (const code of scripts) {
+      try { new Function(String(code))(); } catch { /* ignore invalid user snippets */ }
+    }
+  }, [site.blocks]);
 
   function submitLead(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -32,12 +41,14 @@ export default function PublicSite() {
 
   return (
     <main className="public-site">
+      {pages.length > 1 && <nav className="nav-inline">{pages.map((p) => <button key={p.id} type="button" onClick={() => setActivePage(p.id)}>{p.name}</button>)}</nav>}
       {sections.map((section) => (
-        <section key={section.id} className="b-section">
+        <section key={section.id} className={`b-section ${section.customClass || ''}`} style={{ display: (section.pageId || 'home') === activePage ? 'block' : 'none' }}>
           <h2>{section.title}</h2>
           <p>{section.content}</p>
           {(site.blocks.filter((b) => b.parentId === section.id)).map((block) => (
-            <article key={block.id} className={`b-${block.type}`}>
+            <article key={block.id} className={`b-${block.type} ${block.customClass || ''}`}>
+              {block.customCss && <style>{block.customCss}</style>}
               <h3>{block.title}</h3>
               <p>{block.content}</p>
               {block.type === 'navbar' && <nav className="nav-inline">{(block.items || []).map((item) => <a key={item} href="#">{item}</a>)}</nav>}

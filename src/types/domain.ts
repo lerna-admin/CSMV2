@@ -32,6 +32,11 @@ export type SiteBlock = {
   type: BlockType;
   nodeType?: NodeType;
   parentId?: string;
+  pageId?: string;
+  pageName?: string;
+  customClass?: string;
+  customCss?: string;
+  customJs?: string;
   title: string;
   content: string;
   image?: string;

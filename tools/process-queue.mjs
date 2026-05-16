@@ -46,6 +46,28 @@ async function rebuildIndex(dirPath, indexPath) {
   await upsertJson(indexPath, { updatedAt: new Date().toISOString(), count: files.length, files });
 }
 
+async function writeSiteArtifacts(slug, project) {
+  const sections = (project.blocks || []).filter((b) => b.type === 'section' || b.nodeType === 'section');
+  for (const section of sections) {
+    const pageId = section.pageId || 'home';
+    const secPath = path.join(root, 'data', 'sites', slug, 'sections', `${pageId}-${section.id}.json`);
+    const children = (project.blocks || []).filter((b) => b.parentId === section.id);
+    await upsertJson(secPath, { section, blocks: children });
+    for (const child of children) {
+      if (child.customCss) {
+        const cssPath = path.join(root, 'data', 'sites', slug, 'assets', `${child.id}.css`);
+        await fs.mkdir(path.dirname(cssPath), { recursive: true });
+        await fs.writeFile(cssPath, String(child.customCss), 'utf8');
+      }
+      if (child.customJs) {
+        const jsPath = path.join(root, 'data', 'sites', slug, 'assets', `${child.id}.js`);
+        await fs.mkdir(path.dirname(jsPath), { recursive: true });
+        await fs.writeFile(jsPath, String(child.customJs), 'utf8');
+      }
+    }
+  }
+}
+
 async function main() {
   const files = await fs.readdir(queueDir).catch(() => []);
   for (const f of files.filter((n) => n.endsWith('.json'))) {
@@ -55,8 +77,14 @@ async function main() {
 
     if (item.command === 'register-user') await upsertJson(path.join(root, 'data', 'users', `${payload.email}.json`), payload);
     if (item.command === 'create-project') await upsertJson(path.join(root, 'data', 'sites', `${payload.project.slug}.draft.json`), payload.project);
-    if (item.command === 'publish-site-production') await upsertJson(path.join(root, 'data', 'sites', `${payload.project.slug}.json`), payload.project);
-    if (item.command === 'publish-site-staging') await upsertJson(path.join(root, 'data', 'sites', `${payload.project.slug}.staging.json`), payload.project);
+    if (item.command === 'publish-site-production') {
+      await upsertJson(path.join(root, 'data', 'sites', `${payload.project.slug}.json`), payload.project);
+      await writeSiteArtifacts(payload.project.slug, payload.project);
+    }
+    if (item.command === 'publish-site-staging') {
+      await upsertJson(path.join(root, 'data', 'sites', `${payload.project.slug}.staging.json`), payload.project);
+      await writeSiteArtifacts(payload.project.slug, payload.project);
+    }
     if (item.command === 'save-template') await upsertJson(path.join(root, 'data', 'templates', `${payload.template.id}.json`), payload.template);
     if (item.command === 'save-version') await appendJson(path.join(root, 'data', 'versions', `${payload.siteSlug}.json`), payload.version);
     if (item.command === 'submit-lead') await appendJson(path.join(root, 'data', 'leads', `${payload.siteSlug}.json`), payload);

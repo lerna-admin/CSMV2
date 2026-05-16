@@ -76,7 +76,59 @@ export function upsertProject(project: SiteProject): void {
 }
 
 export function getTemplates(): SiteTemplate[] {
-  return load<SiteTemplate[]>(KEYS.templates, []);
+  const saved = load<SiteTemplate[]>(KEYS.templates, []);
+  if (saved.length) return saved;
+  const now = new Date().toISOString();
+  const starterBase: SiteTemplate[] = [
+    {
+      id: crypto.randomUUID(),
+      ownerEmail: 'system@csmv2.local',
+      ownerRole: 'admin',
+      name: 'SaaS Launch (inspirada en landing gratuita)',
+      createdAt: now,
+      publicTemplate: true,
+      blocks: [
+        { id: crypto.randomUUID(), type: 'section', nodeType: 'section', pageId: 'home', pageName: 'Home', title: 'Hero Page', content: 'Lanzamiento de producto' },
+        { id: crypto.randomUUID(), type: 'hero', nodeType: 'element', parentId: '', pageId: 'home', pageName: 'Home', title: 'Escala tu negocio', content: 'Automatiza procesos en minutos', buttonText: 'Comenzar', buttonUrl: '#', customClass: 'hero-saas' },
+        { id: crypto.randomUUID(), type: 'features', nodeType: 'element', parentId: '', pageId: 'home', pageName: 'Home', title: 'Ventajas', content: 'Todo en uno', items: ['Integraciones', 'Reportes', 'Seguridad'] },
+      ],
+    },
+    {
+      id: crypto.randomUUID(),
+      ownerEmail: 'system@csmv2.local',
+      ownerRole: 'admin',
+      name: 'Portfolio Creative (inspirada en plantilla gratis)',
+      createdAt: now,
+      publicTemplate: true,
+      blocks: [
+        { id: crypto.randomUUID(), type: 'section', nodeType: 'section', pageId: 'home', pageName: 'Home', title: 'Portafolio', content: 'Muestra proyectos' },
+        { id: crypto.randomUUID(), type: 'gallery', nodeType: 'element', parentId: '', pageId: 'home', pageName: 'Home', title: 'Trabajos', content: 'Colección', items: ['https://picsum.photos/560/320', 'https://picsum.photos/561/320'] },
+        { id: crypto.randomUUID(), type: 'cta', nodeType: 'element', parentId: '', pageId: 'home', pageName: 'Home', title: 'Hablemos', content: 'Agenda una llamada', buttonText: 'Contactar', buttonUrl: '#' },
+      ],
+    },
+    {
+      id: crypto.randomUUID(),
+      ownerEmail: 'system@csmv2.local',
+      ownerRole: 'admin',
+      name: 'Restaurant OnePage (inspirada en tema free)',
+      createdAt: now,
+      publicTemplate: true,
+      blocks: [
+        { id: crypto.randomUUID(), type: 'section', nodeType: 'section', pageId: 'home', pageName: 'Home', title: 'Restaurante', content: 'Sabor artesanal' },
+        { id: crypto.randomUUID(), type: 'navbar', nodeType: 'element', parentId: '', pageId: 'home', pageName: 'Home', title: 'Menu', content: 'Inicio|Carta|Reservas', items: ['Inicio', 'Carta', 'Reservas'] },
+        { id: crypto.randomUUID(), type: 'contactForm', nodeType: 'element', parentId: '', pageId: 'home', pageName: 'Home', title: 'Reservar mesa', content: 'Deja tus datos' },
+      ],
+    },
+  ];
+  const starter: SiteTemplate[] = starterBase.map((tpl) => {
+    const sectionId = tpl.blocks.find((b) => b.type === 'section')?.id || '';
+    return {
+      ...tpl,
+      blocks: tpl.blocks.map((b) => (b.nodeType === 'element' ? { ...b, parentId: sectionId } : b)),
+    };
+  });
+  save(KEYS.templates, starter);
+  return starter;
 }
 
 export function upsertTemplate(template: SiteTemplate): void {

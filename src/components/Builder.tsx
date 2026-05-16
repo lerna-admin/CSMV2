@@ -48,6 +48,7 @@ function updateBlock(blocks: SiteBlock[], id: string, patch: Partial<SiteBlock>)
 export default function Builder({ blocks, onChange }: Props) {
   const normalized = toBuilderShape(blocks);
   const sections = normalized.filter((b) => b.nodeType === 'section' || b.type === 'section');
+  const pages = Array.from(new Map(sections.map((s) => [s.pageId || 'home', s.pageName || 'Home'])).entries()).map(([id, name]) => ({ id, name }));
   const childrenBySection = new Map<string, SiteBlock[]>();
   for (const section of sections) childrenBySection.set(section.id, normalized.filter((b) => b.parentId === section.id));
 
@@ -69,6 +70,9 @@ export default function Builder({ blocks, onChange }: Props) {
       id: crypto.randomUUID(),
       nodeType: 'section',
       type: 'section',
+      pageId: 'home',
+      pageName: 'Home',
+      customClass: 'page',
       title: 'Nueva seccion',
       content: 'Seccion arrastrada al body',
     };
@@ -81,11 +85,14 @@ export default function Builder({ blocks, onChange }: Props) {
     if (!raw) return;
     const data = JSON.parse(raw) as { kind: 'section' | 'element'; item?: PaletteItem };
     if (data.kind !== 'element' || !data.item) return;
+    const target = normalized.find((n) => n.id === sectionId);
     const element: SiteBlock = {
       ...data.item,
       id: crypto.randomUUID(),
       nodeType: 'element',
       parentId: sectionId,
+      pageId: target?.pageId || 'home',
+      pageName: target?.pageName || 'Home',
     };
     onChange(normalized.concat(element));
   }
@@ -102,6 +109,28 @@ export default function Builder({ blocks, onChange }: Props) {
         >
           + Seccion
         </div>
+        <button
+          type="button"
+          className="palette-item"
+          onClick={() => {
+            const pageName = prompt('Nombre de la nueva pagina (SPA)') || '';
+            if (!pageName.trim()) return;
+            const pageId = pageName.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-');
+            onChange(normalized.concat({
+              id: crypto.randomUUID(),
+              nodeType: 'section',
+              type: 'section',
+              pageId,
+              pageName: pageName.trim(),
+              customClass: 'page',
+              title: `Pagina ${pageName.trim()}`,
+              content: 'Nueva pagina SPA',
+            }));
+          }}
+        >
+          + Pagina
+        </button>
+        <div className="drop-empty">Paginas: {pages.map((p) => p.name).join(', ') || 'Home'}</div>
         {elementPalette.map((item) => (
           <div
             key={item.type + item.title}
@@ -132,6 +161,10 @@ export default function Builder({ blocks, onChange }: Props) {
               </div>
               <input value={section.title} onChange={(e) => onChange(updateBlock(normalized, section.id, { title: e.target.value }))} placeholder="Titulo de seccion" />
               <textarea value={section.content} onChange={(e) => onChange(updateBlock(normalized, section.id, { content: e.target.value }))} placeholder="Descripcion corta" />
+              <div className="inline-fields">
+                <input value={section.pageName || 'Home'} onChange={(e) => onChange(updateBlock(normalized, section.id, { pageName: e.target.value, pageId: e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, '-') }))} placeholder="Nombre de pagina" />
+                <input value={section.customClass || 'page'} onChange={(e) => onChange(updateBlock(normalized, section.id, { customClass: e.target.value }))} placeholder="Clase CSS de seccion" />
+              </div>
 
               <div className="section-children">
                 {items.length === 0 && <div className="drop-empty">Arrastra elementos aqui.</div>}
@@ -157,6 +190,9 @@ export default function Builder({ blocks, onChange }: Props) {
                       />
                     )}
                     {block.type === 'image' && <input value={block.image || ''} onChange={(e) => onChange(updateBlock(normalized, block.id, { image: e.target.value }))} placeholder="URL imagen" />}
+                    <input value={block.customClass || ''} onChange={(e) => onChange(updateBlock(normalized, block.id, { customClass: e.target.value }))} placeholder="Clase CSS personalizada" />
+                    <textarea value={block.customCss || ''} onChange={(e) => onChange(updateBlock(normalized, block.id, { customCss: e.target.value }))} placeholder="CSS para este bloque (opcional)" />
+                    <textarea value={block.customJs || ''} onChange={(e) => onChange(updateBlock(normalized, block.id, { customJs: e.target.value }))} placeholder="JS para este bloque (opcional)" />
                   </article>
                 ))}
               </div>
