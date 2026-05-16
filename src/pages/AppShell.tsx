@@ -1,8 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import Builder from '../components/Builder';
+import SiteRenderer from '../components/SiteRenderer';
 import { currentUser } from '../lib/auth';
-import { clearSession, getAgents, getLeads, getProjects, getSettings, getTemplates, getUsers, issueUrl, saveSettings, upsertAgent, upsertProject, upsertTemplate } from '../lib/storage';
+import { encryptEpe2, decryptEpe2 } from '../lib/epe2';
+import { clearSession, enqueueCommand, getAgents, getLeads, getProjects, getSettings, getTemplates, getUsers, saveSettings, upsertAgent, upsertProject, upsertTemplate } from '../lib/storage';
 import type { SeoConfig, SiteBlock, SiteProject, SiteTheme } from '../types/domain';
 import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
@@ -26,20 +28,6 @@ const themePresets: SiteTheme[] = [
   { name: 'Creative Dark', primary: '#ffffff', accent: '#f97316', background: '#111827', surface: '#1f2937', text: '#f9fafb', font: 'Trebuchet MS, sans-serif', radius: 12 },
 ];
 
-function TemplatePreview({ blocks }: { blocks: SiteBlock[] }) {
-  return (
-    <div className="template-preview">
-      {blocks.length === 0 && <p>Sin bloques aun.</p>}
-      {blocks.map((block) => (
-        <article key={block.id} className={`preview-block b-${block.type}`}>
-          <h4>{block.title}</h4>
-          <p>{block.content}</p>
-        </article>
-      ))}
-    </div>
-  );
-}
-
 export default function AppShell() {
   const user = currentUser();
   const [refresh, setRefresh] = useState(0);
@@ -48,8 +36,15 @@ export default function AppShell() {
   const [templateName, setTemplateName] = useState('');
   const [templateBlocks, setTemplateBlocks] = useState<SiteBlock[]>([]);
   const [previewTemplateId, setPreviewTemplateId] = useState<string>('');
+  const [automationToken, setAutomationToken] = useState(() => '');
   const routeLocation = useLocation();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const storedAutomationToken = localStorage.getItem('csmv2_github_token_epe');
+    if (!storedAutomationToken || !user?.email) return;
+    try { setAutomationToken(decryptEpe2(storedAutomationToken, user.email)); } catch { /* Ignore invalid local token. */ }
+  }, [user?.email]);
 
   if (!user) return <Navigate to="/" replace />;
   const actor = user;
@@ -90,7 +85,7 @@ export default function AppShell() {
       publishTarget: 'production',
     };
     upsertProject(next);
-    window.open(issueUrl('create-project', { project: next, actor: actor.email }), '_blank', 'noopener,noreferrer');
+    enqueueCommand('create-project', { project: next, actor: actor.email });
     return next;
   }
 
@@ -106,7 +101,7 @@ export default function AppShell() {
 
   function publishSite() {
     const command = project.publishTarget === 'staging' ? 'publish-site-staging' : 'publish-site-production';
-    window.open(issueUrl(command, { project, actor: actor.email }), '_blank', 'noopener,noreferrer');
+    enqueueCommand(command, { project, actor: actor.email });
     upsertProject({ ...project, status: 'published', updatedAt: new Date().toISOString() });
     setRefresh((v) => v + 1);
   }
@@ -124,7 +119,7 @@ export default function AppShell() {
       publicTemplate: true,
     } as const;
     upsertTemplate(template);
-    window.open(issueUrl('save-template', { template, actor: actor.email }), '_blank', 'noopener,noreferrer');
+    enqueueCommand('save-template', { template, actor: actor.email });
     setTemplateName('');
     setTemplateBlocks([]);
     navigate('/app/site');
@@ -221,7 +216,11 @@ export default function AppShell() {
                     </div>
                   ))}
                 </div>
-                {selectedTemplate && <TemplatePreview blocks={selectedTemplate.blocks} />}
+                {selectedTemplate && (
+                  <div className="template-preview live-preview">
+                    <SiteRenderer blocks={selectedTemplate.blocks} theme={selectedTemplate.theme || baseTheme} />
+                  </div>
+                )}
               </section>
             </>
           )}
@@ -236,7 +235,9 @@ export default function AppShell() {
               </div>
               <div className="template-studio-grid">
                 <Builder blocks={templateBlocks} theme={baseTheme} onChange={setTemplateBlocks} />
-                <TemplatePreview blocks={templateBlocks} />
+                <div className="template-preview live-preview">
+                  <SiteRenderer blocks={templateBlocks} theme={baseTheme} />
+                </div>
               </div>
             </section>
           )}
@@ -255,7 +256,7 @@ export default function AppShell() {
                     if (!email || !name) return;
                     const agent = { id: crypto.randomUUID(), email: email.trim().toLowerCase(), name: name.trim(), role: 'agente' as const, createdAt: new Date().toISOString(), createdBy: actor.email };
                     upsertAgent(agent);
-                    window.open(issueUrl('create-agent', { agent, actor: actor.email }), '_blank', 'noopener,noreferrer');
+                    enqueueCommand('create-agent', { agent, actor: actor.email });
                     setRefresh((v) => v + 1);
                   }}>Crear agente</button></article>
                 </div>
@@ -263,10 +264,28 @@ export default function AppShell() {
                   <input type="checkbox" checked={settings.allowPublicSignup} onChange={(e) => {
                     const next = { ...settings, allowPublicSignup: e.target.checked, updatedAt: new Date().toISOString(), updatedBy: actor.email };
                     saveSettings(next);
-                    window.open(issueUrl('save-settings', { settings: next, actor: actor.email }), '_blank', 'noopener,noreferrer');
+                    enqueueCommand('save-settings', { settings: next, actor: actor.email });
                     setRefresh((v) => v + 1);
                   }} /> Permitir registro publico
                 </label>
+                <div className="automation-box">
+                  <h3>Automatizacion GitHub</h3>
+                  <input
+                    type="password"
+                    value={automationToken}
+                    onChange={(event) => setAutomationToken(event.target.value)}
+                    placeholder="Token fine-grained con permiso Issues"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      localStorage.setItem('csmv2_github_token_epe', encryptEpe2(automationToken.trim(), actor.email));
+                      setRefresh((v) => v + 1);
+                    }}
+                  >
+                    Guardar token local
+                  </button>
+                </div>
               </section>
             ) : <section className="admin-panel"><h3>Acceso restringido</h3><p>Solo administradores.</p></section>
           )}

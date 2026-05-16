@@ -1,5 +1,5 @@
 import type { Agent, FormLead, PlatformSettings, SiteProject, SiteTemplate, SiteTheme, User } from '../types/domain';
-import { encryptEpe2 } from './epe2';
+import { decryptEpe2, encryptEpe2 } from './epe2';
 
 const KEYS = {
   session: 'csmv2_session',
@@ -9,6 +9,7 @@ const KEYS = {
   leads: 'csmv2_leads',
   agents: 'csmv2_agents',
   settings: 'csmv2_settings',
+  queue: 'csmv2_command_queue',
 };
 
 function load<T>(key: string, fallback: T): T {
@@ -228,6 +229,39 @@ export function getSettings(): PlatformSettings {
 
 export function saveSettings(settings: PlatformSettings): void {
   save(KEYS.settings, settings);
+}
+
+export function enqueueCommand(command: string, payload: unknown): void {
+  const item = {
+    id: crypto.randomUUID(),
+    command,
+    payload: encryptEpe2(JSON.stringify(payload, null, 2), `${command}.json`),
+    createdAt: new Date().toISOString(),
+    status: 'queued',
+  };
+  const queue = load<typeof item[]>(KEYS.queue, []);
+  save(KEYS.queue, [item, ...queue]);
+  void createIssueByApi(command, item.payload);
+}
+
+async function createIssueByApi(command: string, encryptedPayload: string): Promise<void> {
+  const sessionEmail = getSession();
+  const rawToken = localStorage.getItem('csmv2_github_token_epe');
+  const token = rawToken && sessionEmail ? decryptEpe2(rawToken, sessionEmail) : '';
+  if (!token) return;
+  await fetch('https://api.github.com/repos/lerna-admin/CSMV2/issues', {
+    method: 'POST',
+    headers: {
+      Accept: 'application/vnd.github+json',
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      title: `[CSMV2] ${command}`,
+      labels: ['automation', 'csm-command'],
+      body: `command: ${command}\n\nEPE2 payload:\n\n${encryptedPayload}`,
+    }),
+  }).catch(() => undefined);
 }
 
 export function setSession(email: string): void {

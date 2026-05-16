@@ -25,7 +25,6 @@ export default function AuthPage() {
 
     const result = register(name, email, password);
     if (!result.ok) return setError(result.error || 'No fue posible registrarse');
-    if (result.issue) window.open(result.issue, '_blank', 'noopener,noreferrer');
     navigate('/app');
   }
 
