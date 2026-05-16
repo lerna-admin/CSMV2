@@ -33,6 +33,7 @@ export default function PublicSite() {
       blocks={site.blocks}
       siteSlug={site.slug}
       theme={site.theme}
+      renderMode="public"
       onLead={(lead) => {
         pushLead(lead);
         enqueueCommand('submit-lead', lead);

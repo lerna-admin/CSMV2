@@ -18,6 +18,7 @@
 
 * { box-sizing: border-box; }
 body { margin: 0; min-height: 100vh; }
+#root { min-height: 100vh; }
 button { cursor: pointer; font: inherit; }
 input, textarea, select {
   width: 100%;
@@ -711,11 +712,19 @@ button:disabled { opacity: .5; cursor: not-allowed; }
   margin: 0 auto;
 }
 .public-site.public-site-embedded {
+  min-height: 100dvh;
   max-width: none;
   width: 100%;
   margin: 0;
   padding: 0;
   background: #fff !important;
+}
+.public-site.public-site-rendered {
+  min-height: 100dvh;
+}
+.public-site.public-site-rendered.public-site-embedded {
+  height: 100dvh;
+  overflow: hidden;
 }
 .public-site section {
   margin-bottom: 1rem;
@@ -732,13 +741,23 @@ button:disabled { opacity: .5; cursor: not-allowed; }
   border-radius: 0;
   background: transparent;
 }
+.public-site-rendered.public-site-embedded .b-html-shell,
+.public-site-rendered.public-site-embedded .b-html {
+  height: 100dvh;
+  overflow: hidden;
+}
 .embedded-template-frame {
   display: block;
   width: 100%;
   min-height: 760px;
   border: 0;
   background: #fff;
-  overflow: hidden;
+  overflow: auto;
+}
+.embedded-template-frame-public {
+  min-height: 100dvh;
+  height: 100dvh;
+  overflow: auto;
 }
 .preview-modal {
   position: fixed;

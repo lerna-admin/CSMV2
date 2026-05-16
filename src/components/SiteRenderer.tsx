@@ -7,6 +7,7 @@ type Props = {
   siteSlug?: string;
   theme?: SiteTheme;
   onLead?: (lead: FormLead) => void;
+  renderMode?: 'preview' | 'public';
 };
 
 function parseCssText(css?: string): CSSProperties | undefined {
@@ -18,7 +19,7 @@ function parseCssText(css?: string): CSSProperties | undefined {
   return Object.fromEntries(entries.map(([key, ...value]) => [key, value.join(':')])) as CSSProperties;
 }
 
-export default function SiteRenderer({ blocks, siteSlug = 'preview', theme, onLead }: Props) {
+export default function SiteRenderer({ blocks, siteSlug = 'preview', theme, onLead, renderMode = 'preview' }: Props) {
   const [sent, setSent] = useState(false);
   const hasTree = useMemo(() => blocks.some((b) => b.nodeType || b.type === 'section'), [blocks]);
   const hasEmbeddedTemplate = useMemo(() => blocks.some((b) => b.type === 'html' && (b.embedUrl || b.html)), [blocks]);
@@ -53,33 +54,79 @@ export default function SiteRenderer({ blocks, siteSlug = 'preview', theme, onLe
     event.currentTarget.reset();
   }
 
+  function measureFrameDocument(doc: Document) {
+    const root = doc.documentElement;
+    const body = doc.body;
+    const childBottom = body
+      ? Array.from(body.children).reduce((max, child) => Math.max(max, (child as HTMLElement).getBoundingClientRect().bottom), 0)
+      : 0;
+    return Math.ceil(Math.max(
+      body?.scrollHeight || 0,
+      root?.scrollHeight || 0,
+      body?.offsetHeight || 0,
+      root?.offsetHeight || 0,
+      root?.getBoundingClientRect().height || 0,
+      childBottom,
+      720,
+    ));
+  }
+
   function resizeFrame(frame: HTMLIFrameElement) {
-    frame.setAttribute('scrolling', 'no');
+    const allowInternalScroll = renderMode === 'public';
+    frame.setAttribute('scrolling', allowInternalScroll ? 'auto' : 'no');
+    if (allowInternalScroll) {
+      frame.style.height = '100dvh';
+      try {
+        const doc = frame.contentDocument;
+        if (doc?.documentElement) {
+          doc.documentElement.style.overflowX = 'hidden';
+          doc.documentElement.style.overflowY = 'auto';
+          doc.documentElement.style.minHeight = '100%';
+        }
+        if (doc?.body) {
+          doc.body.style.overflowX = 'hidden';
+          doc.body.style.overflowY = 'auto';
+          doc.body.style.minHeight = '100%';
+        }
+      } catch {
+        /* Cross-origin frames still keep iframe-level scrolling. */
+      }
+      return;
+    }
     const update = () => {
       try {
         const doc = frame.contentDocument;
-        if (doc?.documentElement) doc.documentElement.style.overflow = 'hidden';
-        if (doc?.body) doc.body.style.overflow = 'hidden';
-        const height = Math.max(
-          doc?.body?.scrollHeight || 0,
-          doc?.documentElement?.scrollHeight || 0,
-          720,
-        );
+        if (!doc) return;
+        if (doc.documentElement) {
+          doc.documentElement.style.overflowX = 'hidden';
+          doc.documentElement.style.overflowY = allowInternalScroll ? 'auto' : 'visible';
+        }
+        if (doc.body) {
+          doc.body.style.overflowX = 'hidden';
+          doc.body.style.overflowY = allowInternalScroll ? 'auto' : 'visible';
+        }
+        const height = measureFrameDocument(doc);
         frame.style.height = `${height}px`;
       } catch {
-        frame.style.height = '4200px';
+        frame.style.height = allowInternalScroll ? '100dvh' : '4200px';
       }
     };
     update();
     try {
       const doc = frame.contentDocument;
-      if (doc?.body) new ResizeObserver(update).observe(doc.body);
+      if (doc?.documentElement) new ResizeObserver(update).observe(doc.documentElement);
+      if (doc?.body) {
+        new ResizeObserver(update).observe(doc.body);
+        new MutationObserver(update).observe(doc.body, { attributes: true, childList: true, subtree: true });
+      }
       doc?.querySelectorAll('img').forEach((img) => img.addEventListener('load', update, { once: true }));
+      void doc?.fonts?.ready.then(update);
     } catch {
       /* Cross-origin frames keep their own height fallback. */
     }
     window.setTimeout(update, 300);
     window.setTimeout(update, 1800);
+    window.setTimeout(update, 4200);
   }
 
   function renderEmbeddedTemplate(block: SiteBlock) {
@@ -87,10 +134,10 @@ export default function SiteRenderer({ blocks, siteSlug = 'preview', theme, onLe
     return (
       <iframe
         title={block.title || 'Plantilla HTML'}
-        className="embedded-template-frame"
+        className={`embedded-template-frame ${renderMode === 'public' ? 'embedded-template-frame-public' : ''}`}
         src={srcDoc ? undefined : block.embedUrl}
         srcDoc={srcDoc}
-        scrolling="no"
+        scrolling={renderMode === 'public' ? 'auto' : 'no'}
         onLoad={(event) => resizeFrame(event.currentTarget)}
       />
     );
@@ -129,7 +176,7 @@ export default function SiteRenderer({ blocks, siteSlug = 'preview', theme, onLe
 
   return (
     <main
-      className={`public-site ${hasEmbeddedTemplate ? 'public-site-embedded' : ''}`}
+      className={`public-site ${hasEmbeddedTemplate ? 'public-site-embedded' : ''} ${renderMode === 'public' ? 'public-site-rendered' : ''}`}
       style={theme ? { background: theme.background, color: theme.text, fontFamily: theme.font } : undefined}
     >
       {pages.length > 1 && <nav className="nav-inline">{pages.map((p) => <button key={p.id} type="button" onClick={() => setActivePage(p.id)}>{p.name}</button>)}</nav>}
