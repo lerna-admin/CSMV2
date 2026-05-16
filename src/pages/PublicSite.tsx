@@ -1,6 +1,15 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { CSSProperties, FormEvent, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { getProjects, issueUrl, pushLead } from '../lib/storage';
+
+function parseCssText(css?: string): CSSProperties | undefined {
+  if (!css) return undefined;
+  const entries = css
+    .split(';')
+    .map((rule) => rule.split(':').map((part) => part.trim()))
+    .filter((rule) => rule.length >= 2 && rule[0]);
+  return Object.fromEntries(entries.map(([key, ...value]) => [key, value.join(':')])) as CSSProperties;
+}
 
 export default function PublicSite() {
   const { slug = '' } = useParams();
@@ -53,12 +62,15 @@ export default function PublicSite() {
     >
       {pages.length > 1 && <nav className="nav-inline">{pages.map((p) => <button key={p.id} type="button" onClick={() => setActivePage(p.id)}>{p.name}</button>)}</nav>}
       {sections.map((section) => (
-        <section key={section.id} className={`b-section ${section.customClass || ''}`} style={{ display: (section.pageId || 'home') === activePage ? 'block' : 'none' }}>
+        <section
+          key={section.id}
+          className={`b-section ${section.customClass || ''}`}
+          style={{ ...parseCssText(section.customCss), display: (section.pageId || 'home') === activePage ? 'block' : 'none' }}
+        >
           <h2>{section.title}</h2>
           <p>{section.content}</p>
           {(site.blocks.filter((b) => b.parentId === section.id)).map((block) => (
-            <article key={block.id} className={`b-${block.type} ${block.customClass || ''}`}>
-              {block.customCss && <style>{block.customCss}</style>}
+            <article key={block.id} className={`b-${block.type} ${block.customClass || ''}`} style={parseCssText(block.customCss)}>
               <h3>{block.title}</h3>
               <p>{block.content}</p>
               {block.type === 'navbar' && <nav className="nav-inline">{(block.items || []).map((item) => <a key={item} href="#">{item}</a>)}</nav>}

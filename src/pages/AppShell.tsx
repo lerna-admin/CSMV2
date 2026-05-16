@@ -120,6 +120,7 @@ export default function AppShell() {
       name: templateName.trim(),
       createdAt: new Date().toISOString(),
       blocks: templateBlocks,
+      theme: baseTheme,
       publicTemplate: true,
     } as const;
     upsertTemplate(template);
@@ -215,7 +216,7 @@ export default function AppShell() {
                   {templates.map((tpl) => (
                     <div key={tpl.id} className="template-card">
                       <strong>{tpl.name}</strong>
-                      <button type="button" onClick={() => persist({ ...project, blocks: tpl.blocks, templateId: tpl.id, updatedAt: new Date().toISOString() })}>Usar</button>
+                      <button type="button" onClick={() => persist({ ...project, blocks: tpl.blocks, theme: tpl.theme || project.theme, templateId: tpl.id, updatedAt: new Date().toISOString() })}>Usar</button>
                       <button type="button" onClick={() => setPreviewTemplateId(tpl.id)}>Visualizar</button>
                     </div>
                   ))}

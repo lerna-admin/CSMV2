@@ -78,6 +78,7 @@ export type SiteTemplate = {
   name: string;
   createdAt: string;
   blocks: SiteBlock[];
+  theme?: SiteTheme;
   publicTemplate: boolean;
 };
 
