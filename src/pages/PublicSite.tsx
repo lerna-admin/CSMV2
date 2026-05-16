@@ -10,14 +10,13 @@ type SitesIndex = {
 
 export default function PublicSite() {
   const { slug = '' } = useParams();
-  const [site, setSite] = useState<SiteProject | null>(() => getProjects().find((p) => p.slug === slug && p.status === 'published') || null);
+  const [site, setSite] = useState<SiteProject | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let active = true;
-    const localSite = getProjects().find((p) => p.slug === slug && p.status === 'published') || null;
-    setSite(localSite);
-    setLoading(!localSite);
+    setSite(null);
+    setLoading(true);
 
     async function loadRemoteSite() {
       const indexResponse = await fetch(`${import.meta.env.BASE_URL}data/sites/index.json?ts=${Date.now()}`, { cache: 'no-store' }).catch(() => null);
@@ -34,7 +33,13 @@ export default function PublicSite() {
 
     void loadRemoteSite()
       .then((remoteSite) => {
-        if (active && remoteSite?.status === 'published') setSite(remoteSite);
+        if (!active) return;
+        if (remoteSite?.status === 'published') {
+          setSite(remoteSite);
+          return;
+        }
+        const localSite = getProjects().find((p) => p.slug === slug && p.status === 'published') || null;
+        setSite(localSite);
       })
       .finally(() => {
         if (active) setLoading(false);
