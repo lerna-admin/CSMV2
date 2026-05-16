@@ -69,6 +69,16 @@ function toVideoEmbedUrl(source?: string): string {
   return value;
 }
 
+function addIframeQuery(url: string, params: Record<string, string>): string {
+  try {
+    const next = new URL(url);
+    Object.entries(params).forEach(([key, value]) => next.searchParams.set(key, value));
+    return next.toString();
+  } catch {
+    return url;
+  }
+}
+
 function isDirectVideoFile(source?: string): boolean {
   return !!source && /\.(mp4|webm|ogg)(\?.*)?$/i.test(source.trim());
 }
@@ -137,27 +147,55 @@ function CarouselBlock({ block }: { block: SiteBlock }) {
 }
 
 function VideoBlock({ block }: { block: SiteBlock }) {
+  const settings = {
+    autoplay: block.settings?.autoplay ?? false,
+    muted: block.settings?.muted ?? false,
+    loop: block.settings?.loop ?? false,
+    showControls: block.settings?.showControls ?? true,
+    aspectRatio: block.settings?.aspectRatio || '16 / 9',
+  };
   const source = toVideoEmbedUrl(block.embedUrl);
   if (!source) return null;
 
   if (isDirectVideoFile(source)) {
     return (
       <div className="public-video-wrap">
-        <video className="public-video" controls poster={block.image ? resolveUploadedAssetUrl(block.image) : undefined}>
+        <video
+          className="public-video"
+          controls={settings.showControls}
+          autoPlay={settings.autoplay}
+          muted={settings.muted}
+          loop={settings.loop}
+          playsInline
+          poster={block.image ? resolveUploadedAssetUrl(block.image) : undefined}
+          style={{ aspectRatio: settings.aspectRatio }}
+        >
           <source src={resolveUploadedAssetUrl(source)} />
         </video>
       </div>
     );
   }
 
+  const embedSource = settings.autoplay || settings.muted
+    ? addIframeQuery(source, {
+      autoplay: settings.autoplay ? '1' : '0',
+      mute: settings.muted ? '1' : '0',
+      muted: settings.muted ? '1' : '0',
+      loop: settings.loop ? '1' : '0',
+      controls: settings.showControls ? '1' : '0',
+      playlist: settings.loop && /youtube\.com\/embed\//.test(source) ? source.split('/embed/')[1]?.split('?')[0] || '' : '',
+    })
+    : source;
+
   return (
     <div className="public-video-wrap">
       <iframe
         className="public-video"
         title={block.title}
-        src={source}
+        src={embedSource}
         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
         allowFullScreen
+        style={{ aspectRatio: settings.aspectRatio }}
       />
     </div>
   );
@@ -165,13 +203,20 @@ function VideoBlock({ block }: { block: SiteBlock }) {
 
 function PricingBlock({ block }: { block: SiteBlock }) {
   const cards = parsePricingCards(block.items);
+  const settings = {
+    pricingColumns: Math.min(4, Math.max(1, Number(block.settings?.pricingColumns || 2))),
+    highlightFeatured: block.settings?.highlightFeatured ?? true,
+    featuredIndex: Math.max(0, Number(block.settings?.featuredIndex || 1)),
+    priceAccent: block.settings?.priceAccent || '#0f172a',
+    cardStyle: block.settings?.cardStyle || 'solid',
+  };
   if (!cards.length) return null;
   return (
-    <div className="public-pricing-grid">
+    <div className={`public-pricing-grid public-card-style-${settings.cardStyle}`} style={{ gridTemplateColumns: `repeat(${settings.pricingColumns}, minmax(220px, 1fr))` }}>
       {cards.map((card, index) => (
-        <article key={`${block.id}-pricing-${index}`} className="public-pricing-card">
+        <article key={`${block.id}-pricing-${index}`} className={`public-pricing-card ${settings.highlightFeatured && index === settings.featuredIndex ? 'featured' : ''}`}>
           <strong>{card.name || `Plan ${index + 1}`}</strong>
-          <span>{card.price}</span>
+          <span style={{ color: settings.priceAccent }}>{card.price}</span>
           <ul>
             {card.features.map((feature) => <li key={`${block.id}-pricing-${index}-${feature}`}>{feature}</li>)}
           </ul>
@@ -183,12 +228,17 @@ function PricingBlock({ block }: { block: SiteBlock }) {
 
 function TestimonialsBlock({ block }: { block: SiteBlock }) {
   const items = parseTestimonials(block.items);
+  const settings = {
+    showQuoteMarks: block.settings?.showQuoteMarks ?? true,
+    testimonialColumns: Math.min(4, Math.max(1, Number(block.settings?.testimonialColumns || 2))),
+    cardStyle: block.settings?.cardStyle || 'soft',
+  };
   if (!items.length) return null;
   return (
-    <div className="public-testimonials-grid">
+    <div className={`public-testimonials-grid public-card-style-${settings.cardStyle}`} style={{ gridTemplateColumns: `repeat(${settings.testimonialColumns}, minmax(220px, 1fr))` }}>
       {items.map((item, index) => (
         <article key={`${block.id}-testimonial-${index}`} className="public-testimonial-card">
-          <p>{item.quote}</p>
+          <p>{settings.showQuoteMarks ? `“${item.quote}”` : item.quote}</p>
           <strong>{item.author || `Cliente ${index + 1}`}</strong>
           {item.role && <span>{item.role}</span>}
         </article>
@@ -465,14 +515,14 @@ export default function SiteRenderer({ blocks, siteSlug = 'preview', theme, onLe
         {block.type === 'carousel' && <CarouselBlock block={block} />}
         {block.type === 'table' && (
           <div className="public-table-wrap">
-            <table className="public-table">
+            <table className={`public-table ${block.settings?.striped ? 'public-table-striped' : ''} ${block.settings?.compact ? 'public-table-compact' : ''}`}>
               <tbody>
                 {parseTableRows(block.items).map((row, rowIndex) => (
                   <tr key={`${block.id}-row-${rowIndex}`}>
                     {row.map((cell, cellIndex) => (
                       rowIndex === 0
-                        ? <th key={`${block.id}-cell-${rowIndex}-${cellIndex}`}>{cell}</th>
-                        : <td key={`${block.id}-cell-${rowIndex}-${cellIndex}`}>{cell}</td>
+                        ? <th key={`${block.id}-cell-${rowIndex}-${cellIndex}`} style={{ background: block.settings?.headerBackground || '#eef6ff', textAlign: block.settings?.tableAlign || 'left' }}>{cell}</th>
+                        : <td key={`${block.id}-cell-${rowIndex}-${cellIndex}`} style={{ textAlign: block.settings?.tableAlign || 'left' }}>{cell}</td>
                     ))}
                   </tr>
                 ))}

@@ -1125,9 +1125,16 @@ button:disabled { opacity: .5; cursor: not-allowed; }
   border: 1px solid #d6dee8;
   text-align: left;
 }
+.public-table-compact th,
+.public-table-compact td {
+  padding: .45rem .55rem;
+}
 .public-table th {
   background: #eef6ff;
   color: #0f172a;
+}
+.public-table-striped tbody tr:nth-child(even) td {
+  background: #f8fafc;
 }
 .public-carousel {
   display: grid;
@@ -1225,6 +1232,21 @@ button:disabled { opacity: .5; cursor: not-allowed; }
   border: 1px solid #d6dee8;
   border-radius: 12px;
   background: #fff;
+}
+.public-card-style-outline .public-pricing-card,
+.public-card-style-outline .public-testimonial-card {
+  background: transparent;
+  border-width: 2px;
+}
+.public-card-style-soft .public-pricing-card,
+.public-card-style-soft .public-testimonial-card {
+  background: #f8fbff;
+  border-color: #dbeafe;
+}
+.public-pricing-card.featured {
+  transform: translateY(-4px);
+  box-shadow: 0 18px 40px rgba(15, 23, 42, .12);
+  border-color: #93c5fd;
 }
 .public-pricing-card strong,
 .public-testimonial-card strong {

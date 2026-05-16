@@ -29,11 +29,11 @@ const elementPalette: PaletteItem[] = [
   { type: 'gallery', title: 'Galeria', content: 'Muestra tus trabajos', items: ['https://picsum.photos/500/300', 'https://picsum.photos/501/300'], settings: { galleryColumns: 3, gap: 12, imageFit: 'cover' } },
   { type: 'faq', title: 'FAQ', content: 'Preguntas frecuentes', items: ['Que incluye?:Editor visual completo', 'Como publico?:Con GitHub Actions'] },
   { type: 'carousel', title: 'Carrusel', content: 'Slides principales del sitio', items: ['https://picsum.photos/1200/700?1|Bienestar premium|Experiencias pensadas para convertir', 'https://picsum.photos/1200/700?2|Resultados visibles|Campanas visuales con narrativa clara'], settings: { autoplay: false, intervalMs: 5000, transition: 'slide', showArrows: true, showDots: true, prevLabel: 'Anterior', nextLabel: 'Siguiente', imageFit: 'cover', overlayOpacity: 0.55 } },
-  { type: 'table', title: 'Tabla', content: 'Comparativa de servicios y precios', items: ['Servicio|Duracion|Precio', 'Masaje relajante|60 min|$80', 'Facial premium|45 min|$65'] },
-  { type: 'pricing', title: 'Precios', content: 'Planes comerciales o paquetes destacados', items: ['Starter|$19/mes|1 sitio,Soporte base,Analitica esencial', 'Growth|$49/mes|3 sitios,SEO avanzado,Automatizaciones'] },
-  { type: 'testimonials', title: 'Testimonios', content: 'Prueba social para aumentar conversion', items: ['Ana Torres|CEO de Wellness|Duplicamos conversiones en dos semanas', 'Luis Mejia|Founder de Studio Norte|El editor nos ahorro horas cada semana'] },
+  { type: 'table', title: 'Tabla', content: 'Comparativa de servicios y precios', items: ['Servicio|Duracion|Precio', 'Masaje relajante|60 min|$80', 'Facial premium|45 min|$65'], settings: { striped: true, compact: false, headerBackground: '#eef6ff', tableAlign: 'left' } },
+  { type: 'pricing', title: 'Precios', content: 'Planes comerciales o paquetes destacados', items: ['Starter|$19/mes|1 sitio,Soporte base,Analitica esencial', 'Growth|$49/mes|3 sitios,SEO avanzado,Automatizaciones'], settings: { pricingColumns: 2, highlightFeatured: true, featuredIndex: 1, priceAccent: '#0f172a', cardStyle: 'solid' } },
+  { type: 'testimonials', title: 'Testimonios', content: 'Prueba social para aumentar conversion', items: ['Ana Torres|CEO de Wellness|Duplicamos conversiones en dos semanas', 'Luis Mejia|Founder de Studio Norte|El editor nos ahorro horas cada semana'], settings: { showQuoteMarks: true, testimonialColumns: 2, cardStyle: 'soft' } },
   { type: 'image', title: 'Imagen', content: 'Hero visual', image: 'https://picsum.photos/1200/700', settings: { imageFit: 'cover', linkUrl: '', openInNewTab: false } },
-  { type: 'video', title: 'Video', content: 'Presentacion del producto o demo principal', embedUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', image: 'https://picsum.photos/1200/700?video' },
+  { type: 'video', title: 'Video', content: 'Presentacion del producto o demo principal', embedUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', image: 'https://picsum.photos/1200/700?video', settings: { autoplay: false, muted: false, loop: false, showControls: true, aspectRatio: '16 / 9' } },
   { type: 'html', title: 'HTML embebido', content: 'Iframe o HTML completo', embedUrl: `${import.meta.env.BASE_URL}templates/labspa/index.html` },
   { type: 'contactForm', title: 'Formulario', content: 'Recibe leads desde tu landing' },
   { type: 'cta', title: 'Llamado a la accion', content: 'Convierte visitas en clientes', buttonText: 'Contactar', buttonUrl: '#', settings: { linkUrl: '#', openInNewTab: false } },
@@ -85,6 +85,55 @@ function withBlockDefaults(block: SiteBlock): SiteBlock {
         galleryColumns: current.galleryColumns ?? 3,
         gap: current.gap ?? 12,
         imageFit: current.imageFit || 'cover',
+      },
+    };
+  }
+  if (block.type === 'table') {
+    return {
+      ...block,
+      sourceBlockType: block.sourceBlockType || block.type,
+      settings: {
+        striped: current.striped ?? true,
+        compact: current.compact ?? false,
+        headerBackground: current.headerBackground || '#eef6ff',
+        tableAlign: current.tableAlign || 'left',
+      },
+    };
+  }
+  if (block.type === 'pricing') {
+    return {
+      ...block,
+      sourceBlockType: block.sourceBlockType || block.type,
+      settings: {
+        pricingColumns: current.pricingColumns ?? 2,
+        highlightFeatured: current.highlightFeatured ?? true,
+        featuredIndex: current.featuredIndex ?? 1,
+        priceAccent: current.priceAccent || '#0f172a',
+        cardStyle: current.cardStyle || 'solid',
+      },
+    };
+  }
+  if (block.type === 'testimonials') {
+    return {
+      ...block,
+      sourceBlockType: block.sourceBlockType || block.type,
+      settings: {
+        showQuoteMarks: current.showQuoteMarks ?? true,
+        testimonialColumns: current.testimonialColumns ?? 2,
+        cardStyle: current.cardStyle || 'soft',
+      },
+    };
+  }
+  if (block.type === 'video') {
+    return {
+      ...block,
+      sourceBlockType: block.sourceBlockType || block.type,
+      settings: {
+        autoplay: current.autoplay ?? false,
+        muted: current.muted ?? false,
+        loop: current.loop ?? false,
+        showControls: current.showControls ?? true,
+        aspectRatio: current.aspectRatio || '16 / 9',
       },
     };
   }
@@ -398,6 +447,22 @@ function serializeCarouselSlides(slides: Array<{ image: string; title: string; t
     .filter((slide) => slide.replace(/\|/g, '').trim());
 }
 
+function serializeTableRows(rows: string[][]): string[] {
+  return rows.map((row) => row.map((cell) => cell.trim()).join('|')).filter((row) => row.replace(/\|/g, '').trim());
+}
+
+function serializePricingCards(cards: Array<{ name: string; price: string; features: string[] }>): string[] {
+  return cards
+    .map((card) => [card.name.trim(), card.price.trim(), card.features.map((feature) => feature.trim()).filter(Boolean).join(',')].join('|'))
+    .filter((card) => card.replace(/\|/g, '').trim());
+}
+
+function serializeTestimonials(items: Array<{ author: string; role: string; quote: string }>): string[] {
+  return items
+    .map((item) => [item.author.trim(), item.role.trim(), item.quote.trim()].join('|'))
+    .filter((item) => item.replace(/\|/g, '').trim());
+}
+
 function extractFunctionNames(js: string): string[] {
   const names = new Set<string>();
   const patterns = [
@@ -669,6 +734,11 @@ export default function Builder({ blocks, onChange, theme, onUploadAsset }: Prop
   function patchSelectedSettings(patch: Record<string, string | number | boolean>) {
     if (!selected) return;
     commit(updateBlock(normalized, selected.id, { settings: { ...(selected.settings || {}), ...patch } }));
+  }
+
+  function resetSelectedInstance() {
+    if (!selected) return;
+    commit(updateBlock(normalized, selected.id, { settings: undefined }));
   }
 
   function requestAssetUpload(onUrl: (url: string) => void, hint?: string) {
@@ -964,6 +1034,7 @@ export default function Builder({ blocks, onChange, theme, onUploadAsset }: Prop
               <span>Este bloque es una copia del componente base. Los cambios aqui no modifican la plantilla original ni otros sitios.</span>
               <span>Base: {selected.sourceBlockType || selected.type}{selected.sourceTemplateId ? ` · plantilla ${selected.sourceTemplateId}` : ''}</span>
             </div>
+            <button type="button" onClick={resetSelectedInstance}>Restaurar settings de esta instancia</button>
             <label>Contenido<textarea value={selected.content} onChange={(e) => commit(updateBlock(normalized, selected.id, { content: e.target.value }))} /></label>
             <div className="inline-fields">
               <label>Pagina<input value={selected.pageName || 'Home'} onChange={(e) => commit(updateBlock(normalized, selected.id, { pageName: e.target.value, pageId: e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, '-') }))} /></label>
@@ -1111,18 +1182,194 @@ export default function Builder({ blocks, onChange, theme, onUploadAsset }: Prop
               </>
             )}
             {selected.type === 'table' && (
-              <label>Filas de tabla<textarea value={(selected.items || []).join('\n')} onChange={(e) => commit(updateBlock(normalized, selected.id, { items: e.target.value.split('\n').filter(Boolean) }))} placeholder={'Encabezado 1|Encabezado 2|Encabezado 3\nFila 1 col 1|Fila 1 col 2|Fila 1 col 3'} /></label>
+              <>
+                <label>Filas de tabla<textarea value={(selected.items || []).join('\n')} onChange={(e) => commit(updateBlock(normalized, selected.id, { items: e.target.value.split('\n').filter(Boolean) }))} placeholder={'Encabezado 1|Encabezado 2|Encabezado 3\nFila 1 col 1|Fila 1 col 2|Fila 1 col 3'} /></label>
+                <div className="inline-fields">
+                  <label>Rayado<select value={selected.settings?.striped ? 'si' : 'no'} onChange={(e) => patchSelectedSettings({ striped: e.target.value === 'si' })}>
+                    <option value="si">si</option>
+                    <option value="no">no</option>
+                  </select></label>
+                  <label>Compacta<select value={selected.settings?.compact ? 'si' : 'no'} onChange={(e) => patchSelectedSettings({ compact: e.target.value === 'si' })}>
+                    <option value="no">no</option>
+                    <option value="si">si</option>
+                  </select></label>
+                </div>
+                <div className="inline-fields">
+                  <label>Color encabezado<input type="color" value={selected.settings?.headerBackground || '#eef6ff'} onChange={(e) => patchSelectedSettings({ headerBackground: e.target.value })} /></label>
+                  <label>Alineacion<select value={selected.settings?.tableAlign || 'left'} onChange={(e) => patchSelectedSettings({ tableAlign: e.target.value })}>
+                    <option value="left">left</option>
+                    <option value="center">center</option>
+                    <option value="right">right</option>
+                  </select></label>
+                </div>
+                <div className="component-list-editor">
+                  {parseTableRows(selected.items).map((row, rowIndex, rows) => (
+                    <article key={`${selected.id}-table-row-${rowIndex}`} className="component-item-card">
+                      <strong>{rowIndex === 0 ? 'Encabezado' : `Fila ${rowIndex}`}</strong>
+                      <label>Columnas<textarea value={row.join('|')} onChange={(e) => {
+                        const nextRows = rows.slice();
+                        nextRows[rowIndex] = e.target.value.split('|').map((cell) => cell.trim());
+                        commit(updateBlock(normalized, selected.id, { items: serializeTableRows(nextRows) }));
+                      }} /></label>
+                      <div className="mini-actions">
+                        <button type="button" disabled={rowIndex === 0} onClick={() => {
+                          const nextRows = rows.slice();
+                          [nextRows[rowIndex - 1], nextRows[rowIndex]] = [nextRows[rowIndex], nextRows[rowIndex - 1]];
+                          commit(updateBlock(normalized, selected.id, { items: serializeTableRows(nextRows) }));
+                        }}><ArrowUp size={15} /></button>
+                        <button type="button" disabled={rowIndex === rows.length - 1} onClick={() => {
+                          const nextRows = rows.slice();
+                          [nextRows[rowIndex + 1], nextRows[rowIndex]] = [nextRows[rowIndex], nextRows[rowIndex + 1]];
+                          commit(updateBlock(normalized, selected.id, { items: serializeTableRows(nextRows) }));
+                        }}><ArrowDown size={15} /></button>
+                        <button type="button" onClick={() => commit(updateBlock(normalized, selected.id, { items: serializeTableRows(rows.filter((_, index) => index !== rowIndex)) }))}><Trash2 size={15} /></button>
+                      </div>
+                    </article>
+                  ))}
+                  <button type="button" onClick={() => commit(updateBlock(normalized, selected.id, { items: [...(selected.items || []), 'Nueva columna 1|Nueva columna 2|Nueva columna 3'] }))}>Agregar fila</button>
+                </div>
+              </>
             )}
             {selected.type === 'pricing' && (
-              <label>Tarjetas de precio<textarea value={(selected.items || []).join('\n')} onChange={(e) => commit(updateBlock(normalized, selected.id, { items: e.target.value.split('\n').filter(Boolean) }))} placeholder={'Starter|$19/mes|Feature 1,Feature 2,Feature 3\nGrowth|$49/mes|Feature A,Feature B,Feature C'} /></label>
+              <>
+                <label>Tarjetas de precio<textarea value={(selected.items || []).join('\n')} onChange={(e) => commit(updateBlock(normalized, selected.id, { items: e.target.value.split('\n').filter(Boolean) }))} placeholder={'Starter|$19/mes|Feature 1,Feature 2,Feature 3\nGrowth|$49/mes|Feature A,Feature B,Feature C'} /></label>
+                <div className="inline-fields">
+                  <label>Columnas<input type="number" min={1} max={4} value={selected.settings?.pricingColumns || 2} onChange={(e) => patchSelectedSettings({ pricingColumns: Number(e.target.value) || 2 })} /></label>
+                  <label>Estilo<select value={selected.settings?.cardStyle || 'solid'} onChange={(e) => patchSelectedSettings({ cardStyle: e.target.value })}>
+                    <option value="solid">solid</option>
+                    <option value="outline">outline</option>
+                    <option value="soft">soft</option>
+                  </select></label>
+                </div>
+                <div className="inline-fields">
+                  <label>Destacar plan<select value={selected.settings?.highlightFeatured ? 'si' : 'no'} onChange={(e) => patchSelectedSettings({ highlightFeatured: e.target.value === 'si' })}>
+                    <option value="si">si</option>
+                    <option value="no">no</option>
+                  </select></label>
+                  <label>Indice destacado<input type="number" min={0} value={selected.settings?.featuredIndex || 0} onChange={(e) => patchSelectedSettings({ featuredIndex: Number(e.target.value) || 0 })} /></label>
+                </div>
+                <label>Color de precio<input type="color" value={selected.settings?.priceAccent || '#0f172a'} onChange={(e) => patchSelectedSettings({ priceAccent: e.target.value })} /></label>
+                <div className="component-list-editor">
+                  {parsePricingCards(selected.items).map((card, index, cards) => (
+                    <article key={`${selected.id}-pricing-editor-${index}`} className="component-item-card">
+                      <strong>Plan {index + 1}</strong>
+                      <label>Nombre<input value={card.name} onChange={(e) => {
+                        const nextCards = cards.slice();
+                        nextCards[index] = { ...card, name: e.target.value };
+                        commit(updateBlock(normalized, selected.id, { items: serializePricingCards(nextCards) }));
+                      }} /></label>
+                      <label>Precio<input value={card.price} onChange={(e) => {
+                        const nextCards = cards.slice();
+                        nextCards[index] = { ...card, price: e.target.value };
+                        commit(updateBlock(normalized, selected.id, { items: serializePricingCards(nextCards) }));
+                      }} /></label>
+                      <label>Features<textarea value={card.features.join(', ')} onChange={(e) => {
+                        const nextCards = cards.slice();
+                        nextCards[index] = { ...card, features: e.target.value.split(',').map((feature) => feature.trim()).filter(Boolean) };
+                        commit(updateBlock(normalized, selected.id, { items: serializePricingCards(nextCards) }));
+                      }} /></label>
+                      <div className="mini-actions">
+                        <button type="button" disabled={index === 0} onClick={() => {
+                          const nextCards = cards.slice();
+                          [nextCards[index - 1], nextCards[index]] = [nextCards[index], nextCards[index - 1]];
+                          commit(updateBlock(normalized, selected.id, { items: serializePricingCards(nextCards) }));
+                        }}><ArrowUp size={15} /></button>
+                        <button type="button" disabled={index === cards.length - 1} onClick={() => {
+                          const nextCards = cards.slice();
+                          [nextCards[index + 1], nextCards[index]] = [nextCards[index], nextCards[index + 1]];
+                          commit(updateBlock(normalized, selected.id, { items: serializePricingCards(nextCards) }));
+                        }}><ArrowDown size={15} /></button>
+                        <button type="button" onClick={() => commit(updateBlock(normalized, selected.id, { items: serializePricingCards(cards.filter((_, cardIndex) => cardIndex !== index)) }))}><Trash2 size={15} /></button>
+                      </div>
+                    </article>
+                  ))}
+                  <button type="button" onClick={() => commit(updateBlock(normalized, selected.id, { items: [...(selected.items || []), 'Nuevo plan|$0|Feature 1,Feature 2'] }))}>Agregar plan</button>
+                </div>
+              </>
             )}
             {selected.type === 'testimonials' && (
-              <label>Testimonios<textarea value={(selected.items || []).join('\n')} onChange={(e) => commit(updateBlock(normalized, selected.id, { items: e.target.value.split('\n').filter(Boolean) }))} placeholder={'Ana Torres|CEO de Wellness|La plataforma nos ayudo a vender mas\nLuis Mejia|Founder|El editor es rapido y claro'} /></label>
+              <>
+                <label>Testimonios<textarea value={(selected.items || []).join('\n')} onChange={(e) => commit(updateBlock(normalized, selected.id, { items: e.target.value.split('\n').filter(Boolean) }))} placeholder={'Ana Torres|CEO de Wellness|La plataforma nos ayudo a vender mas\nLuis Mejia|Founder|El editor es rapido y claro'} /></label>
+                <div className="inline-fields">
+                  <label>Columnas<input type="number" min={1} max={4} value={selected.settings?.testimonialColumns || 2} onChange={(e) => patchSelectedSettings({ testimonialColumns: Number(e.target.value) || 2 })} /></label>
+                  <label>Estilo<select value={selected.settings?.cardStyle || 'soft'} onChange={(e) => patchSelectedSettings({ cardStyle: e.target.value })}>
+                    <option value="soft">soft</option>
+                    <option value="solid">solid</option>
+                    <option value="outline">outline</option>
+                  </select></label>
+                </div>
+                <label>Comillas visibles<select value={selected.settings?.showQuoteMarks ? 'si' : 'no'} onChange={(e) => patchSelectedSettings({ showQuoteMarks: e.target.value === 'si' })}>
+                  <option value="si">si</option>
+                  <option value="no">no</option>
+                </select></label>
+                <div className="component-list-editor">
+                  {parseTestimonials(selected.items).map((item, index, items) => (
+                    <article key={`${selected.id}-testimonial-editor-${index}`} className="component-item-card">
+                      <strong>Testimonio {index + 1}</strong>
+                      <label>Autor<input value={item.author} onChange={(e) => {
+                        const nextItems = items.slice();
+                        nextItems[index] = { ...item, author: e.target.value };
+                        commit(updateBlock(normalized, selected.id, { items: serializeTestimonials(nextItems) }));
+                      }} /></label>
+                      <label>Cargo<input value={item.role} onChange={(e) => {
+                        const nextItems = items.slice();
+                        nextItems[index] = { ...item, role: e.target.value };
+                        commit(updateBlock(normalized, selected.id, { items: serializeTestimonials(nextItems) }));
+                      }} /></label>
+                      <label>Texto<textarea value={item.quote} onChange={(e) => {
+                        const nextItems = items.slice();
+                        nextItems[index] = { ...item, quote: e.target.value };
+                        commit(updateBlock(normalized, selected.id, { items: serializeTestimonials(nextItems) }));
+                      }} /></label>
+                      <div className="mini-actions">
+                        <button type="button" disabled={index === 0} onClick={() => {
+                          const nextItems = items.slice();
+                          [nextItems[index - 1], nextItems[index]] = [nextItems[index], nextItems[index - 1]];
+                          commit(updateBlock(normalized, selected.id, { items: serializeTestimonials(nextItems) }));
+                        }}><ArrowUp size={15} /></button>
+                        <button type="button" disabled={index === items.length - 1} onClick={() => {
+                          const nextItems = items.slice();
+                          [nextItems[index + 1], nextItems[index]] = [nextItems[index], nextItems[index + 1]];
+                          commit(updateBlock(normalized, selected.id, { items: serializeTestimonials(nextItems) }));
+                        }}><ArrowDown size={15} /></button>
+                        <button type="button" onClick={() => commit(updateBlock(normalized, selected.id, { items: serializeTestimonials(items.filter((_, itemIndex) => itemIndex !== index)) }))}><Trash2 size={15} /></button>
+                      </div>
+                    </article>
+                  ))}
+                  <button type="button" onClick={() => commit(updateBlock(normalized, selected.id, { items: [...(selected.items || []), 'Nuevo cliente|Cargo|Escribe aqui el testimonio'] }))}>Agregar testimonio</button>
+                </div>
+              </>
             )}
             {selected.type === 'video' && (
               <>
                 <label>URL del video<input value={selected.embedUrl || ''} onChange={(e) => commit(updateBlock(normalized, selected.id, { embedUrl: e.target.value }))} placeholder="https://www.youtube.com/watch?v=... o https://cdn.../video.mp4" /></label>
                 <label>Poster / portada<input value={selected.image || ''} onChange={(e) => commit(updateBlock(normalized, selected.id, { image: e.target.value }))} placeholder="https://..." /></label>
+                <div className="inline-fields">
+                  <label>Aspect ratio<select value={selected.settings?.aspectRatio || '16 / 9'} onChange={(e) => patchSelectedSettings({ aspectRatio: e.target.value })}>
+                    <option value="16 / 9">16 / 9</option>
+                    <option value="4 / 3">4 / 3</option>
+                    <option value="1 / 1">1 / 1</option>
+                    <option value="21 / 9">21 / 9</option>
+                  </select></label>
+                  <label>Controles<select value={selected.settings?.showControls === false ? 'no' : 'si'} onChange={(e) => patchSelectedSettings({ showControls: e.target.value === 'si' })}>
+                    <option value="si">si</option>
+                    <option value="no">no</option>
+                  </select></label>
+                </div>
+                <div className="inline-fields">
+                  <label>Autoplay<select value={selected.settings?.autoplay ? 'si' : 'no'} onChange={(e) => patchSelectedSettings({ autoplay: e.target.value === 'si' })}>
+                    <option value="no">no</option>
+                    <option value="si">si</option>
+                  </select></label>
+                  <label>Muted<select value={selected.settings?.muted ? 'si' : 'no'} onChange={(e) => patchSelectedSettings({ muted: e.target.value === 'si' })}>
+                    <option value="no">no</option>
+                    <option value="si">si</option>
+                  </select></label>
+                </div>
+                <label>Loop<select value={selected.settings?.loop ? 'si' : 'no'} onChange={(e) => patchSelectedSettings({ loop: e.target.value === 'si' })}>
+                  <option value="no">no</option>
+                  <option value="si">si</option>
+                </select></label>
                 <button
                   type="button"
                   disabled={!onUploadAsset || uploadingAsset}

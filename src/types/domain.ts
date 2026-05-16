@@ -43,6 +43,21 @@ export type BlockSettings = {
   gap?: number;
   linkUrl?: string;
   openInNewTab?: boolean;
+  striped?: boolean;
+  compact?: boolean;
+  headerBackground?: string;
+  tableAlign?: 'left' | 'center' | 'right';
+  pricingColumns?: number;
+  highlightFeatured?: boolean;
+  featuredIndex?: number;
+  priceAccent?: string;
+  showQuoteMarks?: boolean;
+  testimonialColumns?: number;
+  cardStyle?: 'solid' | 'outline' | 'soft';
+  showControls?: boolean;
+  muted?: boolean;
+  loop?: boolean;
+  aspectRatio?: '16 / 9' | '4 / 3' | '1 / 1' | '21 / 9';
 };
 
 export type SiteBlock = {
