@@ -1,5 +1,6 @@
 import { CSSProperties, FormEvent, useEffect, useMemo, useState } from 'react';
 import type { FormLead, SiteBlock, SiteTheme } from '../types/domain';
+import { composeFrameHtml } from '../lib/htmlTemplates';
 
 type Props = {
   blocks: SiteBlock[];
@@ -53,9 +54,12 @@ export default function SiteRenderer({ blocks, siteSlug = 'preview', theme, onLe
   }
 
   function resizeFrame(frame: HTMLIFrameElement) {
+    frame.setAttribute('scrolling', 'no');
     const update = () => {
       try {
         const doc = frame.contentDocument;
+        if (doc?.documentElement) doc.documentElement.style.overflow = 'hidden';
+        if (doc?.body) doc.body.style.overflow = 'hidden';
         const height = Math.max(
           doc?.body?.scrollHeight || 0,
           doc?.documentElement?.scrollHeight || 0,
@@ -67,17 +71,26 @@ export default function SiteRenderer({ blocks, siteSlug = 'preview', theme, onLe
       }
     };
     update();
+    try {
+      const doc = frame.contentDocument;
+      if (doc?.body) new ResizeObserver(update).observe(doc.body);
+      doc?.querySelectorAll('img').forEach((img) => img.addEventListener('load', update, { once: true }));
+    } catch {
+      /* Cross-origin frames keep their own height fallback. */
+    }
     window.setTimeout(update, 300);
     window.setTimeout(update, 1800);
   }
 
   function renderEmbeddedTemplate(block: SiteBlock) {
+    const srcDoc = composeFrameHtml(block);
     return (
       <iframe
         title={block.title || 'Plantilla HTML'}
         className="embedded-template-frame"
-        src={block.embedUrl}
-        srcDoc={block.embedUrl ? undefined : block.html}
+        src={srcDoc ? undefined : block.embedUrl}
+        srcDoc={srcDoc}
+        scrolling="no"
         onLoad={(event) => resizeFrame(event.currentTarget)}
       />
     );

@@ -1,5 +1,6 @@
 import { ArrowDown, ArrowUp, Copy, Eye, Layers, Monitor, Palette, Plus, Smartphone, Tablet, Trash2 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
+import { composeFrameHtml, serializeFrameDocument } from '../lib/htmlTemplates';
 import type { SiteBlock, SiteTheme } from '../types/domain';
 
 type Props = {
@@ -73,6 +74,48 @@ function cloneWithChildren(blocks: SiteBlock[], source: SiteBlock): SiteBlock[] 
   if (source.nodeType !== 'section' && source.type !== 'section') return blocks.concat(cloned);
   const children = blocks.filter((b) => b.parentId === source.id).map((child) => ({ ...child, id: crypto.randomUUID(), parentId: newId }));
   return blocks.concat(cloned, ...children);
+}
+
+function EditableHtmlFrame({ block, onSave }: { block: SiteBlock; onSave: (patch: Partial<SiteBlock>) => void }) {
+  const frameRef = useRef<HTMLIFrameElement>(null);
+  const [dirty, setDirty] = useState(false);
+  const srcDoc = composeFrameHtml(block, true);
+
+  function prepareEditor(frame: HTMLIFrameElement) {
+    const doc = frame.contentDocument;
+    if (!doc || !srcDoc) return;
+    doc.designMode = 'on';
+    doc.body?.querySelectorAll('a').forEach((link) => {
+      link.addEventListener('click', (event) => event.preventDefault());
+    });
+    doc.addEventListener('input', () => setDirty(true));
+    doc.addEventListener('keyup', () => setDirty(true));
+  }
+
+  function saveVisualChanges() {
+    const doc = frameRef.current?.contentDocument;
+    if (!doc) return;
+    onSave({ html: serializeFrameDocument(doc) });
+    setDirty(false);
+  }
+
+  return (
+    <div className="embedded-template-editor">
+      <iframe
+        ref={frameRef}
+        title={block.title}
+        src={srcDoc ? undefined : block.embedUrl}
+        srcDoc={srcDoc}
+        scrolling="no"
+        onLoad={(event) => prepareEditor(event.currentTarget)}
+      />
+      <div className="html-edit-toolbar">
+        <span>{srcDoc ? 'Edicion visual activa: haz clic dentro del sitio para cambiar textos.' : 'Este bloque usa una URL externa. Usa una plantilla desde el catalogo para editarla.'}</span>
+        <button type="button" disabled={!srcDoc} onClick={saveVisualChanges}>{dirty ? 'Guardar cambios visuales' : 'Guardar HTML'}</button>
+      </div>
+      <p>{block.content}</p>
+    </div>
+  );
 }
 
 export default function Builder({ blocks, onChange, theme }: Props) {
@@ -234,10 +277,10 @@ export default function Builder({ blocks, onChange, theme }: Props) {
                   </div>
                 </div>
                 {isEmbeddedTemplate ? (
-                  <div className="embedded-template-editor">
-                    <iframe title={section.title} src={section.embedUrl} srcDoc={section.embedUrl ? undefined : section.html} />
-                    <p>{section.content}</p>
-                  </div>
+                  <EditableHtmlFrame
+                    block={section}
+                    onSave={(patch) => commit(updateBlock(normalized, section.id, patch))}
+                  />
                 ) : (
                   <>
                     <h2
@@ -287,7 +330,7 @@ export default function Builder({ blocks, onChange, theme }: Props) {
                             {block.content}
                           </p>
                           {block.type === 'html' && (block.embedUrl || block.html) && (
-                            <iframe className="block-embed-preview" title={block.title} src={block.embedUrl} srcDoc={block.embedUrl ? undefined : block.html} />
+                            <iframe className="block-embed-preview" title={block.title} src={composeFrameHtml(block) ? undefined : block.embedUrl} srcDoc={composeFrameHtml(block)} />
                           )}
                           {block.buttonText && <span className="fake-button">{block.buttonText}</span>}
                           {block.type === 'gallery' && <div className="mini-gallery">{(block.items || []).slice(0, 3).map((img) => <img key={img} src={img} alt="" />)}</div>}
@@ -325,7 +368,9 @@ export default function Builder({ blocks, onChange, theme }: Props) {
             {selected.type === 'image' && <label>Imagen<input value={selected.image || ''} onChange={(e) => commit(updateBlock(normalized, selected.id, { image: e.target.value }))} /></label>}
             {selected.type === 'html' && (
               <>
-                <label>URL iframe<input value={selected.embedUrl || ''} onChange={(e) => commit(updateBlock(normalized, selected.id, { embedUrl: e.target.value }))} /></label>
+                <label>URL original<input value={selected.sourceUrl || selected.embedUrl || ''} onChange={(e) => commit(updateBlock(normalized, selected.id, { embedUrl: e.target.value, sourceUrl: e.target.value }))} /></label>
+                <label>CSS de la plantilla<textarea value={selected.htmlCss || ''} onChange={(e) => commit(updateBlock(normalized, selected.id, { htmlCss: e.target.value }))} /></label>
+                <label>JS de la plantilla<textarea value={selected.htmlJs || ''} onChange={(e) => commit(updateBlock(normalized, selected.id, { htmlJs: e.target.value }))} /></label>
                 <label>HTML completo<textarea value={selected.html || ''} onChange={(e) => commit(updateBlock(normalized, selected.id, { html: e.target.value }))} /></label>
               </>
             )}

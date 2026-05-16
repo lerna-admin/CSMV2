@@ -4,8 +4,9 @@ import Builder from '../components/Builder';
 import SiteRenderer from '../components/SiteRenderer';
 import { currentUser } from '../lib/auth';
 import { encryptEpe2, decryptEpe2 } from '../lib/epe2';
+import { cloneBlocksWithNewIds, materializeTemplateBlocks } from '../lib/htmlTemplates';
 import { clearSession, enqueueCommand, getAgents, getLeads, getProjects, getSettings, getTemplates, getUsers, saveSettings, upsertAgent, upsertProject, upsertTemplate } from '../lib/storage';
-import type { SeoConfig, SiteBlock, SiteProject, SiteTheme } from '../types/domain';
+import type { SeoConfig, SiteBlock, SiteProject, SiteTemplate, SiteTheme } from '../types/domain';
 import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
 const COLORS = ['#1e40af', '#16a34a', '#ea580c'];
@@ -35,7 +36,11 @@ export default function AppShell() {
   const [future, setFuture] = useState<SiteProject[]>([]);
   const [templateName, setTemplateName] = useState('');
   const [templateBlocks, setTemplateBlocks] = useState<SiteBlock[]>([]);
+  const [editingTemplateId, setEditingTemplateId] = useState('');
   const [previewTemplateId, setPreviewTemplateId] = useState<string>('');
+  const [newSiteTitle, setNewSiteTitle] = useState('');
+  const [newSiteSlug, setNewSiteSlug] = useState('');
+  const [templateLoadingId, setTemplateLoadingId] = useState('');
   const [automationToken, setAutomationToken] = useState(() => '');
   const routeLocation = useLocation();
   const navigate = useNavigate();
@@ -52,6 +57,7 @@ export default function AppShell() {
   const allProjects = getProjects();
   const myProject = allProjects.find((p) => p.ownerEmail === actor.email) || null;
   const templates = getTemplates().filter((t) => t.publicTemplate || t.ownerEmail === actor.email);
+  const myTemplates = templates.filter((t) => t.ownerEmail === actor.email);
   const leads = getLeads();
   const settings = getSettings();
   const agents = getAgents();
@@ -65,14 +71,26 @@ export default function AppShell() {
     return Array.from(map.entries()).map(([name, v]) => ({ name, v }));
   })();
 
-  function ensureProject() {
-    if (myProject) return myProject;
+  function slugify(value: string) {
+    return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || actor.email.split('@')[0].toLowerCase().replace(/[^a-z0-9-]/g, '-');
+  }
+
+  function createSite() {
+    const title = newSiteTitle.trim() || `${actor.name} Site`;
+    const baseSlug = slugify(newSiteSlug || title);
+    const usedSlugs = new Set(allProjects.filter((p) => p.ownerEmail !== actor.email).map((p) => p.slug));
+    let slug = baseSlug;
+    let suffix = 2;
+    while (usedSlugs.has(slug)) {
+      slug = `${baseSlug}-${suffix}`;
+      suffix += 1;
+    }
     const next: SiteProject = {
       id: crypto.randomUUID(),
       ownerEmail: actor.email,
-      slug: actor.email.split('@')[0].toLowerCase().replace(/[^a-z0-9-]/g, '-'),
-      title: `${actor.name} Site`,
-      description: 'Proyecto inicial',
+      slug,
+      title,
+      description: 'Sitio creado con CSMV2',
       status: 'draft',
       updatedAt: new Date().toISOString(),
       blocks: [],
@@ -83,13 +101,16 @@ export default function AppShell() {
     };
     upsertProject(next);
     enqueueCommand('create-project', { project: next, actor: actor.email });
-    return next;
+    setNewSiteTitle('');
+    setNewSiteSlug('');
+    setRefresh((v) => v + 1);
   }
 
-  const project = ensureProject();
-  const projectTheme = project.theme || baseTheme;
+  const project = myProject;
+  const projectTheme = project?.theme || baseTheme;
 
   function persist(next: SiteProject) {
+    if (!project) return;
     setHistory((h) => [...h, project]);
     setFuture([]);
     upsertProject(next);
@@ -97,6 +118,7 @@ export default function AppShell() {
   }
 
   function publishSite() {
+    if (!project) return;
     const command = project.publishTarget === 'staging' ? 'publish-site-staging' : 'publish-site-production';
     const nextProject: SiteProject = { ...project, status: 'published', updatedAt: new Date().toISOString() };
     upsertProject(nextProject);
@@ -105,10 +127,24 @@ export default function AppShell() {
     navigate(`/s/${nextProject.slug}`);
   }
 
+  async function applyTemplate(template: SiteTemplate) {
+    if (!project) return;
+    setTemplateLoadingId(template.id);
+    try {
+      const blocks = template.blocks.some((block) => block.type === 'html')
+        ? await materializeTemplateBlocks(template.blocks)
+        : cloneBlocksWithNewIds(template.blocks);
+      persist({ ...project, blocks, theme: template.theme || project.theme, templateId: template.id, updatedAt: new Date().toISOString() });
+      setPreviewTemplateId('');
+    } finally {
+      setTemplateLoadingId('');
+    }
+  }
+
   function saveSharedTemplate() {
     if (!templateName.trim()) return;
     const template = {
-      id: crypto.randomUUID(),
+      id: editingTemplateId || crypto.randomUUID(),
       ownerEmail: actor.email,
       ownerRole: actor.role,
       name: templateName.trim(),
@@ -119,6 +155,7 @@ export default function AppShell() {
     } as const;
     upsertTemplate(template);
     enqueueCommand('save-template', { template, actor: actor.email });
+    setEditingTemplateId('');
     setTemplateName('');
     setTemplateBlocks([]);
     navigate('/app/site');
@@ -146,13 +183,29 @@ export default function AppShell() {
         </aside>
 
         <div className="studio-content wpwix-content">
-          {routeLocation.pathname === '/app/site' && (
+          {routeLocation.pathname === '/app/site' && (!project ? (
+            <section className="create-site-panel">
+              <div>
+                <p className="eyebrow">Nuevo sitio</p>
+                <h2>Crea una ruta publica antes de editar</h2>
+                <p>El sitio empieza como borrador. Al publicar, quedara disponible en una ruta publica propia como #/s/mi-landing y se encolara el pipeline para guardar el JSON en el repositorio.</p>
+              </div>
+              <div className="create-site-form">
+                <label>Nombre del sitio<input value={newSiteTitle} onChange={(event) => {
+                  setNewSiteTitle(event.target.value);
+                  if (!newSiteSlug) setNewSiteSlug(slugify(event.target.value));
+                }} placeholder="Mi landing principal" /></label>
+                <label>Ruta publica<input value={newSiteSlug} onChange={(event) => setNewSiteSlug(slugify(event.target.value))} placeholder="mi-landing" /></label>
+                <button type="button" onClick={createSite}>Crear sitio</button>
+              </div>
+            </section>
+          ) : (
             <>
               <section className="seo-panel">
-                <h3>Proyecto unico: {project.title}</h3>
-                <p>URL publica: https://lerna-admin.github.io/CSMV2/#/s/{project.slug}</p>
+                <h3>Sitio: {project.title}</h3>
+                <p>Estado: {project.status === 'published' ? 'publicado' : 'borrador'} · URL publica: https://lerna-admin.github.io/CSMV2/#/s/{project.slug}</p>
                 <div className="actions">
-                  <button type="button" onClick={publishSite}>Publicar</button>
+                  <button type="button" onClick={publishSite}>Publicar sitio</button>
                   <button type="button" disabled={!history.length} onClick={() => {
                     const prev = history[history.length - 1];
                     setHistory((h) => h.slice(0, -1));
@@ -210,27 +263,37 @@ export default function AppShell() {
                   {templates.map((tpl) => (
                     <div key={tpl.id} className="template-card">
                       <strong>{tpl.name}</strong>
-                      <button type="button" onClick={() => persist({ ...project, blocks: tpl.blocks, theme: tpl.theme || project.theme, templateId: tpl.id, updatedAt: new Date().toISOString() })}>Usar</button>
+                      <button type="button" disabled={templateLoadingId === tpl.id} onClick={() => { void applyTemplate(tpl); }}>{templateLoadingId === tpl.id ? 'Preparando...' : 'Usar y editar'}</button>
                       <button type="button" onClick={() => setPreviewTemplateId(tpl.id)}>Visualizar</button>
                     </div>
                   ))}
                 </div>
-                {selectedTemplate && (
-                  <div className="template-preview live-preview">
-                    <SiteRenderer blocks={selectedTemplate.blocks} theme={selectedTemplate.theme || baseTheme} />
-                  </div>
-                )}
               </section>
             </>
-          )}
+          ))}
 
           {routeLocation.pathname === '/app/templates' && (
             <section className="template-studio">
               <h3>Crear plantilla</h3>
               <p>Vista independiente para construir plantillas sin ruido de administración.</p>
+              {myTemplates.length > 0 && (
+                <div className="template-list owned-template-list">
+                  {myTemplates.map((tpl) => (
+                    <div key={tpl.id} className="template-card">
+                      <strong>{tpl.name}</strong>
+                      <button type="button" onClick={() => {
+                        setEditingTemplateId(tpl.id);
+                        setTemplateName(tpl.name);
+                        setTemplateBlocks(cloneBlocksWithNewIds(tpl.blocks));
+                      }}>Editar plantilla</button>
+                      <button type="button" onClick={() => setPreviewTemplateId(tpl.id)}>Visualizar</button>
+                    </div>
+                  ))}
+                </div>
+              )}
               <div className="template-head">
                 <input value={templateName} onChange={(e) => setTemplateName(e.target.value)} placeholder="Nombre de plantilla" />
-                <button type="button" onClick={saveSharedTemplate}>Guardar plantilla compartida</button>
+                <button type="button" onClick={saveSharedTemplate}>{editingTemplateId ? 'Actualizar plantilla' : 'Guardar plantilla compartida'}</button>
               </div>
               <div className="template-studio-grid">
                 <Builder blocks={templateBlocks} theme={baseTheme} onChange={setTemplateBlocks} />
@@ -290,6 +353,20 @@ export default function AppShell() {
           )}
         </div>
       </section>
+      {selectedTemplate && (
+        <div className="preview-modal" role="dialog" aria-modal="true">
+          <div className="preview-modal-head">
+            <div>
+              <strong>{selectedTemplate.name}</strong>
+              <span>Vista previa exacta. Cierra esta vista y pulsa “Usar y editar” para convertirla en tu sitio editable.</span>
+            </div>
+            <button type="button" onClick={() => setPreviewTemplateId('')}>Cerrar</button>
+          </div>
+          <div className="preview-modal-body">
+            <SiteRenderer blocks={selectedTemplate.blocks} theme={selectedTemplate.theme || baseTheme} />
+          </div>
+        </div>
+      )}
     </main>
   );
 }

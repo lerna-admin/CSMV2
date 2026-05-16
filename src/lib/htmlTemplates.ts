@@ -1,0 +1,63 @@
+import type { SiteBlock } from '../types/domain';
+
+function escapeStyleText(css: string): string {
+  return css.replace(/<\/style/gi, '<\\/style');
+}
+
+function assetBaseFromUrl(sourceUrl: string): string {
+  return new URL('.', new URL(sourceUrl, window.location.href)).href;
+}
+
+export function cloneBlocksWithNewIds(blocks: SiteBlock[]): SiteBlock[] {
+  const ids = new Map<string, string>();
+  for (const block of blocks) ids.set(block.id, crypto.randomUUID());
+  return blocks.map((block) => ({
+    ...block,
+    id: ids.get(block.id) || crypto.randomUUID(),
+    parentId: block.parentId ? ids.get(block.parentId) || block.parentId : undefined,
+  }));
+}
+
+export function injectBaseTag(html: string, sourceUrl: string): string {
+  const baseHref = assetBaseFromUrl(sourceUrl);
+  const baseTag = `<base href="${baseHref}">`;
+  if (/<base\s/i.test(html)) return html.replace(/<base[^>]*>/i, baseTag);
+  if (/<head[^>]*>/i.test(html)) return html.replace(/<head[^>]*>/i, (match) => `${match}\n${baseTag}`);
+  return `<!doctype html><html><head>${baseTag}</head><body>${html}</body></html>`;
+}
+
+export async function materializeTemplateBlocks(blocks: SiteBlock[]): Promise<SiteBlock[]> {
+  const cloned = cloneBlocksWithNewIds(blocks);
+  await Promise.all(cloned.map(async (block) => {
+    if (block.type !== 'html' || block.html || !block.embedUrl) return;
+    const response = await fetch(block.embedUrl, { cache: 'no-store' });
+    const html = await response.text();
+    block.sourceUrl = block.embedUrl;
+    block.htmlBaseUrl = assetBaseFromUrl(block.embedUrl);
+    block.html = injectBaseTag(html, block.embedUrl);
+  }));
+  return cloned;
+}
+
+export function composeFrameHtml(block: SiteBlock, editor = false): string | undefined {
+  if (!block.html) return undefined;
+  const styles = [
+    block.htmlCss ? `<style data-csmv2-user-css>${escapeStyleText(block.htmlCss)}</style>` : '',
+    editor ? '<style data-csmv2-editor-css>[contenteditable="true"]{outline:1px dashed rgba(0,110,220,.35);outline-offset:2px}</style>' : '',
+  ].filter(Boolean).join('\n');
+  const scripts = block.htmlJs ? `<script data-csmv2-user-js>${block.htmlJs.replace(/<\/script/gi, '<\\/script')}</script>` : '';
+  let next = block.html;
+  if (styles) {
+    next = /<\/head>/i.test(next) ? next.replace(/<\/head>/i, `${styles}\n</head>`) : `${styles}\n${next}`;
+  }
+  if (scripts) {
+    next = /<\/body>/i.test(next) ? next.replace(/<\/body>/i, `${scripts}\n</body>`) : `${next}\n${scripts}`;
+  }
+  return next;
+}
+
+export function serializeFrameDocument(documentRef: Document): string {
+  const clone = documentRef.documentElement.cloneNode(true) as HTMLElement;
+  clone.querySelectorAll('[data-csmv2-user-css], [data-csmv2-user-js], [data-csmv2-editor-css]').forEach((node) => node.remove());
+  return `<!doctype html>\n${clone.outerHTML}`;
+}

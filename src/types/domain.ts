@@ -42,6 +42,10 @@ export type SiteBlock = {
   image?: string;
   embedUrl?: string;
   html?: string;
+  htmlBaseUrl?: string;
+  htmlCss?: string;
+  htmlJs?: string;
+  sourceUrl?: string;
   buttonText?: string;
   buttonUrl?: string;
   items?: string[];
