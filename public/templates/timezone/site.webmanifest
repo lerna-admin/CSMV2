@@ -1,0 +1,8 @@
+{
+  "name": "TimeZone",
+  "short_name": "TimeZone",
+  "icons": [],
+  "theme_color": "#ffffff",
+  "background_color": "#ffffff",
+  "display": "standalone"
+}

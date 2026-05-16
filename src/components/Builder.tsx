@@ -204,7 +204,10 @@ function EditableHtmlFrame({ block, onSave }: { block: SiteBlock; onSave: (patch
     doc.addEventListener('click', (event) => {
       const element = getEditableHtmlTarget(event.target);
       if (!element) return;
-      if (element.closest('a,button,[role="button"],input[type="button"],input[type="submit"]')) event.preventDefault();
+      if (element.closest('a,button,[role="button"],input[type="button"],input[type="submit"]')) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      }
       doc.querySelectorAll('.csmv2-node-selected').forEach((node) => node.classList.remove('csmv2-node-selected'));
       element.classList.add('csmv2-node-selected');
       setSelectedNode(readHtmlNode(element));
@@ -269,7 +272,7 @@ function EditableHtmlFrame({ block, onSave }: { block: SiteBlock; onSave: (patch
         src={srcDoc ? undefined : block.embedUrl}
         srcDoc={srcDoc}
         scrolling="no"
-        sandbox="allow-same-origin"
+        sandbox="allow-same-origin allow-scripts allow-forms"
         onLoad={(event) => prepareEditor(event.currentTarget)}
       />
       <div className="html-edit-toolbar">

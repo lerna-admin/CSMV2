@@ -24,7 +24,9 @@ function decryptEpe2(value, fileKey) {
   const payload = JSON.parse(Buffer.from(value.slice(5), 'base64').toString('utf8'));
   const expected = hash(`${fileKey}:${payload.p}`);
   if (expected !== payload.s) throw new Error('Invalid EPE2 signature');
-  return xor(Buffer.from(payload.p, 'base64').toString('utf8'), hash(fileKey));
+  const binary = Buffer.from(payload.p, 'base64').toString('latin1');
+  const plainBinary = xor(binary, hash(fileKey));
+  return Buffer.from(plainBinary, 'latin1').toString('utf8');
 }
 
 async function upsertJson(filePath, data) {
