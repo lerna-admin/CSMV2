@@ -55,6 +55,7 @@ export default function AppShell() {
   });
   const [templateLoadingId, setTemplateLoadingId] = useState('');
   const [automationToken, setAutomationToken] = useState(() => '');
+  const [revertingToPublished, setRevertingToPublished] = useState(false);
   const routeLocation = useLocation();
   const navigate = useNavigate();
 
@@ -147,6 +148,16 @@ export default function AppShell() {
       actor: actor.email,
     });
     return publicAssetUrl;
+  }
+
+  async function loadPublishedSiteSnapshot(slug: string): Promise<SiteProject | null> {
+    const indexResponse = await fetch(`${import.meta.env.BASE_URL}data/sites/index.json?ts=${Date.now()}`, { cache: 'no-store' }).catch(() => null);
+    if (!indexResponse?.ok) return null;
+    const index = await indexResponse.json() as { files?: string[] };
+    if (!index.files?.includes(`${slug}.json`)) return null;
+    const response = await fetch(`${import.meta.env.BASE_URL}data/sites/${encodeURIComponent(slug)}.json?ts=${Date.now()}`, { cache: 'no-store' }).catch(() => null);
+    if (!response?.ok) return null;
+    return await response.json() as SiteProject;
   }
 
   function updateSiteDraft(patch: Partial<typeof siteDraft>) {
@@ -249,6 +260,27 @@ export default function AppShell() {
     enqueueCommand(command, { project: nextProject, actor: actor.email });
     setRefresh((v) => v + 1);
     navigate(`/s/${nextProject.slug}`);
+  }
+
+  async function revertToPublishedSite() {
+    if (!project) return;
+    setRevertingToPublished(true);
+    try {
+      const published = await loadPublishedSiteSnapshot(project.slug);
+      if (!published) {
+        alert('No existe una version publicada para restaurar este sitio.');
+        return;
+      }
+      persist({
+        ...published,
+        id: project.id,
+        ownerEmail: project.ownerEmail,
+        versions: project.versions,
+        updatedAt: new Date().toISOString(),
+      });
+    } finally {
+      setRevertingToPublished(false);
+    }
   }
 
   async function applyTemplate(template: SiteTemplate) {
@@ -440,6 +472,9 @@ export default function AppShell() {
                     <p>Estado: {project.status === 'published' ? 'publicado' : 'borrador'} · URL publica: {publicUrl(project.slug)}</p>
                     <div className="actions">
                       <button type="button" onClick={publishSite}>Publicar sitio</button>
+                      <button type="button" disabled={revertingToPublished} onClick={() => { void revertToPublishedSite(); }}>
+                        {revertingToPublished ? 'Restaurando...' : 'Volver a publicado'}
+                      </button>
                       <button type="button" disabled={!history.length} onClick={() => {
                         const prev = history[history.length - 1];
                         setHistory((h) => h.slice(0, -1));
