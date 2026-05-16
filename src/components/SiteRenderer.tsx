@@ -1,6 +1,7 @@
 import { CSSProperties, FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import type { FormLead, SiteBlock, SiteTheme } from '../types/domain';
 import { composeFrameHtml } from '../lib/htmlTemplates';
+import { resolveUploadedAssetUrl } from '../lib/storage';
 
 type Props = {
   blocks: SiteBlock[];
@@ -86,7 +87,7 @@ function CarouselBlock({ block }: { block: SiteBlock }) {
   return (
     <div className="public-carousel">
       <div className="public-carousel-stage">
-        {slide.image && <img src={slide.image} alt={slide.title || block.title} />}
+        {slide.image && <img src={resolveUploadedAssetUrl(slide.image)} alt={slide.title || block.title} />}
         <div className="public-carousel-copy">
           <strong>{slide.title || block.title}</strong>
           {slide.text && <p>{slide.text}</p>}
@@ -110,8 +111,8 @@ function VideoBlock({ block }: { block: SiteBlock }) {
   if (isDirectVideoFile(source)) {
     return (
       <div className="public-video-wrap">
-        <video className="public-video" controls poster={block.image || undefined}>
-          <source src={source} />
+        <video className="public-video" controls poster={block.image ? resolveUploadedAssetUrl(block.image) : undefined}>
+          <source src={resolveUploadedAssetUrl(source)} />
         </video>
       </div>
     );
@@ -417,7 +418,7 @@ export default function SiteRenderer({ blocks, siteSlug = 'preview', theme, onLe
         <h3>{block.title}</h3>
         <p>{block.content}</p>
         {block.type === 'navbar' && <nav className="nav-inline">{(block.items || []).map((item) => <a key={item} href="#">{item}</a>)}</nav>}
-        {block.type === 'gallery' && <div className="gallery-grid">{(block.items || []).map((img) => <img key={img} src={img} alt="gallery" />)}</div>}
+        {block.type === 'gallery' && <div className="gallery-grid">{(block.items || []).map((img) => <img key={img} src={resolveUploadedAssetUrl(img)} alt="gallery" />)}</div>}
         {block.type === 'faq' && <div>{(block.items || []).map((qa) => <p key={qa}>{qa}</p>)}</div>}
         {block.type === 'carousel' && <CarouselBlock block={block} />}
         {block.type === 'table' && (
@@ -440,7 +441,7 @@ export default function SiteRenderer({ blocks, siteSlug = 'preview', theme, onLe
         {block.type === 'video' && <VideoBlock block={block} />}
         {block.type === 'pricing' && <PricingBlock block={block} />}
         {block.type === 'testimonials' && <TestimonialsBlock block={block} />}
-        {block.image && block.type !== 'video' && <img src={block.image} alt={block.title} />}
+        {block.image && block.type !== 'video' && <img src={resolveUploadedAssetUrl(block.image)} alt={block.title} />}
         {block.buttonText && <a href={block.buttonUrl || '#'}>{block.buttonText}</a>}
         {block.type === 'contactForm' && (
           <form className="lead-form" onSubmit={submitLead}>

@@ -10,6 +10,7 @@ const KEYS = {
   agents: 'csmv2_agents',
   settings: 'csmv2_settings',
   queue: 'csmv2_command_queue',
+  uploadedAssets: 'csmv2_uploaded_assets',
 };
 
 function load<T>(key: string, fallback: T): T {
@@ -249,6 +250,18 @@ export function getSession(): string | null {
 
 export function clearSession(): void {
   localStorage.removeItem(KEYS.session);
+}
+
+export function cacheUploadedAsset(publicUrl: string, dataUrl: string): void {
+  const assets = load<Record<string, string>>(KEYS.uploadedAssets, {});
+  assets[publicUrl] = dataUrl;
+  save(KEYS.uploadedAssets, assets);
+}
+
+export function resolveUploadedAssetUrl(url?: string): string {
+  if (!url) return '';
+  const assets = load<Record<string, string>>(KEYS.uploadedAssets, {});
+  return assets[url] || url;
 }
 
 export function issueUrl(command: string, payload: unknown): string {

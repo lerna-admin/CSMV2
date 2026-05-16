@@ -41,6 +41,13 @@ async function appendJson(filePath, data) {
   await fs.writeFile(filePath, JSON.stringify(arr, null, 2) + '\n', 'utf8');
 }
 
+async function writeDataUrl(filePath, dataUrl) {
+  const match = String(dataUrl).match(/^data:([^;]+);base64,(.+)$/);
+  if (!match) throw new Error(`Invalid data URL for asset ${filePath}`);
+  await fs.mkdir(path.dirname(filePath), { recursive: true });
+  await fs.writeFile(filePath, Buffer.from(match[2], 'base64'));
+}
+
 async function rebuildIndex(dirPath, indexPath) {
   const files = (await fs.readdir(dirPath).catch(() => []))
     .filter((name) => name.endsWith('.json') && name !== 'index.json')
@@ -86,6 +93,9 @@ async function main() {
     if (item.command === 'publish-site-staging') {
       await upsertJson(path.join(root, 'data', 'sites', `${payload.project.slug}.staging.json`), payload.project);
       await writeSiteArtifacts(payload.project.slug, payload.project);
+    }
+    if (item.command === 'save-site-asset') {
+      await writeDataUrl(path.join(root, 'data', 'sites', payload.siteSlug, 'assets', payload.fileName), payload.dataUrl);
     }
     if (item.command === 'save-template') await upsertJson(path.join(root, 'data', 'templates', `${payload.template.id}.json`), payload.template);
     if (item.command === 'save-version') await appendJson(path.join(root, 'data', 'versions', `${payload.siteSlug}.json`), payload.version);

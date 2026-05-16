@@ -2,11 +2,13 @@ import { ArrowDown, ArrowUp, Copy, Eye, Layers, Monitor, Palette, Plus, Smartpho
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { composeFrameHtml, serializeFrameDocument } from '../lib/htmlTemplates';
 import type { SiteBlock, SiteTheme } from '../types/domain';
+import { resolveUploadedAssetUrl } from '../lib/storage';
 
 type Props = {
   blocks: SiteBlock[];
   onChange: (blocks: SiteBlock[]) => void;
   theme?: SiteTheme;
+  onUploadAsset?: (file: File, hint?: string) => Promise<string>;
 };
 
 type PaletteItem = Omit<SiteBlock, 'id' | 'parentId' | 'nodeType'>;
@@ -376,12 +378,21 @@ function safeFunctionName(value: string): string {
   return cleaned || `accion_${Date.now()}`;
 }
 
-function EditableHtmlFrame({ block, onSave }: { block: SiteBlock; onSave: (patch: Partial<SiteBlock>) => void }) {
+function EditableHtmlFrame({
+  block,
+  onSave,
+  onUploadAsset,
+}: {
+  block: SiteBlock;
+  onSave: (patch: Partial<SiteBlock>) => void;
+  onUploadAsset?: (file: File, hint?: string) => Promise<string>;
+}) {
   const frameRef = useRef<HTMLIFrameElement>(null);
   const [dirty, setDirty] = useState(false);
   const [selectedNode, setSelectedNode] = useState<HtmlNodeSelection | null>(null);
   const [scriptDraft, setScriptDraft] = useState(block.htmlJs || '');
   const [newFunctionName, setNewFunctionName] = useState('');
+  const [uploadingAsset, setUploadingAsset] = useState(false);
   const srcDoc = composeFrameHtml(block, true);
   const functionNames = useMemo(() => extractFunctionNames(`${extractInlineScripts(block.html)}\n${scriptDraft}`), [block.html, scriptDraft]);
   const functionOptions = selectedNode?.actionName && !functionNames.includes(selectedNode.actionName) ? [selectedNode.actionName, ...functionNames] : functionNames;
@@ -475,6 +486,27 @@ function EditableHtmlFrame({ block, onSave }: { block: SiteBlock; onSave: (patch
     setDirty(true);
   }
 
+  function requestNodeImageUpload() {
+    if (!onUploadAsset || selectedNode?.tagName !== 'img') return;
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      setUploadingAsset(true);
+      try {
+        const url = await onUploadAsset(file, selectedNode.idValue || selectedNode.label || 'html-image');
+        patchSelectedElement({ src: url, alt: selectedNode.alt || file.name.replace(/\.[^.]+$/, '') });
+      } catch (error) {
+        alert(error instanceof Error ? error.message : 'No se pudo subir la imagen');
+      } finally {
+        setUploadingAsset(false);
+      }
+    };
+    input.click();
+  }
+
   function saveVisualChanges() {
     const doc = frameRef.current?.contentDocument;
     if (!doc) return;
@@ -538,6 +570,11 @@ function EditableHtmlFrame({ block, onSave }: { block: SiteBlock; onSave: (patch
                   <span>{selectedNode.label}</span>
                 </div>
               </div>
+              {selectedNode.tagName === 'img' && (
+                <button type="button" disabled={!onUploadAsset || uploadingAsset} onClick={requestNodeImageUpload}>
+                  {uploadingAsset ? 'Subiendo imagen...' : 'Subir imagen para este nodo'}
+                </button>
+              )}
               <button type="button" onClick={addFunctionAndSelect}>Crear y conectar funcion</button>
               <label>Jerarquia del nodo<textarea value={selectedNode.ancestryText} readOnly placeholder="Nodo actual y ancestros" /></label>
               <label>Eventos detectados<textarea value={selectedNode.eventsText} readOnly placeholder="Eventos inline del nodo y ancestros cercanos" /></label>
@@ -555,9 +592,10 @@ function EditableHtmlFrame({ block, onSave }: { block: SiteBlock; onSave: (patch
   );
 }
 
-export default function Builder({ blocks, onChange, theme }: Props) {
+export default function Builder({ blocks, onChange, theme, onUploadAsset }: Props) {
   const [selectedId, setSelectedId] = useState<string>('');
   const [device, setDevice] = useState<DeviceMode>('desktop');
+  const [uploadingAsset, setUploadingAsset] = useState(false);
   const normalized = useMemo(() => toBuilderShape(blocks), [blocks]);
   const sections = normalized.filter((b) => b.nodeType === 'section' || b.type === 'section');
   const selected = normalized.find((b) => b.id === selectedId) || null;
@@ -567,6 +605,27 @@ export default function Builder({ blocks, onChange, theme }: Props) {
 
   function commit(next: SiteBlock[]) {
     onChange(next);
+  }
+
+  function requestAssetUpload(onUrl: (url: string) => void, hint?: string) {
+    if (!onUploadAsset) return;
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      setUploadingAsset(true);
+      try {
+        const url = await onUploadAsset(file, hint);
+        onUrl(url);
+      } catch (error) {
+        alert(error instanceof Error ? error.message : 'No se pudo subir la imagen');
+      } finally {
+        setUploadingAsset(false);
+      }
+    };
+    input.click();
   }
 
   function removeBlock(id: string) {
@@ -716,6 +775,7 @@ export default function Builder({ blocks, onChange, theme }: Props) {
                 {isEmbeddedTemplate ? (
                   <EditableHtmlFrame
                     block={section}
+                    onUploadAsset={onUploadAsset}
                     onSave={(patch) => commit(updateBlock(normalized, section.id, patch))}
                   />
                 ) : (
@@ -770,12 +830,12 @@ export default function Builder({ blocks, onChange, theme }: Props) {
                             <iframe className="block-embed-preview" title={block.title} src={composeFrameHtml(block) ? undefined : block.embedUrl} srcDoc={composeFrameHtml(block)} />
                           )}
                           {block.buttonText && <span className="fake-button">{block.buttonText}</span>}
-                          {block.type === 'gallery' && <div className="mini-gallery">{(block.items || []).slice(0, 3).map((img) => <img key={img} src={img} alt="" />)}</div>}
+                          {block.type === 'gallery' && <div className="mini-gallery">{(block.items || []).slice(0, 3).map((img) => <img key={img} src={resolveUploadedAssetUrl(img)} alt="" />)}</div>}
                           {block.type === 'carousel' && (
                             <div className="mini-carousel">
                               {parseCarouselSlides(block.items).slice(0, 2).map((slide, index) => (
                                 <div key={`${block.id}-slide-${index}`} className="mini-carousel-slide">
-                                  {slide.image && <img src={slide.image} alt={slide.title || `slide-${index + 1}`} />}
+                                  {slide.image && <img src={resolveUploadedAssetUrl(slide.image)} alt={slide.title || `slide-${index + 1}`} />}
                                   <strong>{slide.title || `Slide ${index + 1}`}</strong>
                                 </div>
                               ))}
@@ -812,7 +872,7 @@ export default function Builder({ blocks, onChange, theme }: Props) {
                           )}
                           {block.type === 'video' && (
                             <div className="mini-video">
-                              {block.image && <img src={block.image} alt={block.title} />}
+                              {block.image && <img src={resolveUploadedAssetUrl(block.image)} alt={block.title} />}
                               <span>{block.embedUrl || 'Sin fuente de video'}</span>
                             </div>
                           )}
@@ -847,8 +907,38 @@ export default function Builder({ blocks, onChange, theme }: Props) {
             {(selected.type === 'gallery' || selected.type === 'faq' || selected.type === 'features' || selected.type === 'navbar') && (
               <label>Items<textarea value={(selected.items || []).join('\n')} onChange={(e) => commit(updateBlock(normalized, selected.id, { items: e.target.value.split('\n').filter(Boolean) }))} /></label>
             )}
+            {selected.type === 'gallery' && (
+              <button
+                type="button"
+                disabled={!onUploadAsset || uploadingAsset}
+                onClick={() => requestAssetUpload((url) => commit(updateBlock(normalized, selected.id, { items: [...(selected.items || []), url] })), selected.title)}
+              >
+                {uploadingAsset ? 'Subiendo imagen...' : 'Subir imagen a galeria'}
+              </button>
+            )}
             {selected.type === 'carousel' && (
-              <label>Slides del carrusel<textarea value={(selected.items || []).join('\n')} onChange={(e) => commit(updateBlock(normalized, selected.id, { items: e.target.value.split('\n').filter(Boolean) }))} placeholder={'https://.../slide-1.jpg|Titulo 1|Texto 1\nhttps://.../slide-2.jpg|Titulo 2|Texto 2'} /></label>
+              <>
+                <label>Slides del carrusel<textarea value={(selected.items || []).join('\n')} onChange={(e) => commit(updateBlock(normalized, selected.id, { items: e.target.value.split('\n').filter(Boolean) }))} placeholder={'https://.../slide-1.jpg|Titulo 1|Texto 1\nhttps://.../slide-2.jpg|Titulo 2|Texto 2'} /></label>
+                <button
+                  type="button"
+                  disabled={!onUploadAsset || uploadingAsset}
+                  onClick={() => requestAssetUpload((url) => commit(updateBlock(normalized, selected.id, { items: [...(selected.items || []), `${url}|Nuevo slide|Describe este slide`] })), selected.title)}
+                >
+                  {uploadingAsset ? 'Subiendo imagen...' : 'Subir imagen como slide'}
+                </button>
+              </>
+            )}
+            {selected.type === 'image' && (
+              <>
+                <label>Imagen<input value={selected.image || ''} onChange={(e) => commit(updateBlock(normalized, selected.id, { image: e.target.value }))} /></label>
+                <button
+                  type="button"
+                  disabled={!onUploadAsset || uploadingAsset}
+                  onClick={() => requestAssetUpload((url) => commit(updateBlock(normalized, selected.id, { image: url })), selected.title)}
+                >
+                  {uploadingAsset ? 'Subiendo imagen...' : 'Subir imagen'}
+                </button>
+              </>
             )}
             {selected.type === 'table' && (
               <label>Filas de tabla<textarea value={(selected.items || []).join('\n')} onChange={(e) => commit(updateBlock(normalized, selected.id, { items: e.target.value.split('\n').filter(Boolean) }))} placeholder={'Encabezado 1|Encabezado 2|Encabezado 3\nFila 1 col 1|Fila 1 col 2|Fila 1 col 3'} /></label>
@@ -859,11 +949,17 @@ export default function Builder({ blocks, onChange, theme }: Props) {
             {selected.type === 'testimonials' && (
               <label>Testimonios<textarea value={(selected.items || []).join('\n')} onChange={(e) => commit(updateBlock(normalized, selected.id, { items: e.target.value.split('\n').filter(Boolean) }))} placeholder={'Ana Torres|CEO de Wellness|La plataforma nos ayudo a vender mas\nLuis Mejia|Founder|El editor es rapido y claro'} /></label>
             )}
-            {selected.type === 'image' && <label>Imagen<input value={selected.image || ''} onChange={(e) => commit(updateBlock(normalized, selected.id, { image: e.target.value }))} /></label>}
             {selected.type === 'video' && (
               <>
                 <label>URL del video<input value={selected.embedUrl || ''} onChange={(e) => commit(updateBlock(normalized, selected.id, { embedUrl: e.target.value }))} placeholder="https://www.youtube.com/watch?v=... o https://cdn.../video.mp4" /></label>
                 <label>Poster / portada<input value={selected.image || ''} onChange={(e) => commit(updateBlock(normalized, selected.id, { image: e.target.value }))} placeholder="https://..." /></label>
+                <button
+                  type="button"
+                  disabled={!onUploadAsset || uploadingAsset}
+                  onClick={() => requestAssetUpload((url) => commit(updateBlock(normalized, selected.id, { image: url })), `${selected.title}-poster`)}
+                >
+                  {uploadingAsset ? 'Subiendo imagen...' : 'Subir poster'}
+                </button>
               </>
             )}
             {selected.type === 'html' && (

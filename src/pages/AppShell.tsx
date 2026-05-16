@@ -5,7 +5,7 @@ import SiteRenderer from '../components/SiteRenderer';
 import { currentUser } from '../lib/auth';
 import { encryptEpe2, decryptEpe2 } from '../lib/epe2';
 import { cloneBlocksWithNewIds, materializeTemplateBlocks } from '../lib/htmlTemplates';
-import { clearSession, enqueueCommand, getAgents, getLeads, getProjects, getSettings, getTemplates, getUsers, saveSettings, upsertAgent, upsertProject, upsertTemplate } from '../lib/storage';
+import { cacheUploadedAsset, clearSession, enqueueCommand, getAgents, getLeads, getProjects, getSettings, getTemplates, getUsers, saveSettings, upsertAgent, upsertProject, upsertTemplate } from '../lib/storage';
 import type { SiteBlock, SiteProject, SiteTemplate, SiteTheme } from '../types/domain';
 import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
@@ -92,6 +92,61 @@ export default function AppShell() {
 
   function publicUrl(slug: string) {
     return `${window.location.origin}${import.meta.env.BASE_URL}#/s/${slug}`;
+  }
+
+  function siteAssetUrl(slug: string, fileName: string) {
+    return `${window.location.origin}${import.meta.env.BASE_URL}data/sites/${slug}/assets/${fileName}`;
+  }
+
+  function sanitizeFileSegment(value: string) {
+    return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'asset';
+  }
+
+  function readFileAsDataUrl(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ''));
+      reader.onerror = () => reject(reader.error || new Error('No se pudo leer el archivo'));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function optimizeImage(file: File): Promise<{ dataUrl: string; extension: string }> {
+    const source = await readFileAsDataUrl(file);
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error('No se pudo procesar la imagen'));
+      img.src = source;
+    });
+    const maxWidth = 1600;
+    const scale = Math.min(1, maxWidth / image.width);
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(image.width * scale));
+    canvas.height = Math.max(1, Math.round(image.height * scale));
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return { dataUrl: source, extension: file.name.split('.').pop() || 'png' };
+    ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+    const preferred = canvas.toDataURL('image/webp', 0.82);
+    if (preferred.length < source.length) return { dataUrl: preferred, extension: 'webp' };
+    return { dataUrl: source, extension: file.name.split('.').pop() || 'png' };
+  }
+
+  async function uploadSiteAsset(file: File, hint?: string): Promise<string> {
+    if (!project) throw new Error('Selecciona un sitio antes de subir archivos');
+    const optimized = await optimizeImage(file);
+    if (optimized.dataUrl.length > 240000) throw new Error('La imagen sigue siendo demasiado grande para el flujo por issues. Usa una mas ligera.');
+    const stamp = Date.now().toString(36);
+    const fileName = `${sanitizeFileSegment(hint || file.name.replace(/\.[^.]+$/, ''))}-${stamp}.${optimized.extension}`;
+    const publicAssetUrl = siteAssetUrl(project.slug, fileName);
+    cacheUploadedAsset(publicAssetUrl, optimized.dataUrl);
+    enqueueCommand('save-site-asset', {
+      siteSlug: project.slug,
+      fileName,
+      dataUrl: optimized.dataUrl,
+      actor: actor.email,
+    });
+    return publicAssetUrl;
   }
 
   function updateSiteDraft(patch: Partial<typeof siteDraft>) {
@@ -437,7 +492,12 @@ export default function AppShell() {
                     </div>
                   </section>
 
-                  <Builder blocks={project.blocks} theme={projectTheme} onChange={(blocks) => persist({ ...project, blocks, updatedAt: new Date().toISOString() })} />
+                  <Builder
+                    blocks={project.blocks}
+                    theme={projectTheme}
+                    onUploadAsset={uploadSiteAsset}
+                    onChange={(blocks) => persist({ ...project, blocks, updatedAt: new Date().toISOString() })}
+                  />
 
                   <section className="templates">
                     <h3>Plantillas disponibles</h3>

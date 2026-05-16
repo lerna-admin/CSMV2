@@ -49,6 +49,31 @@ function frameReadyScript(): string {
   </script>`;
 }
 
+function localAssetScript(): string {
+  return `<script data-csmv2-local-assets>
+    (function () {
+      function applyLocalAssets() {
+        try {
+          var raw = localStorage.getItem('csmv2_uploaded_assets');
+          if (!raw) return;
+          var assets = JSON.parse(raw);
+          if (!assets || typeof assets !== 'object') return;
+          document.querySelectorAll('[src],[poster]').forEach(function (node) {
+            var src = node.getAttribute('src');
+            var poster = node.getAttribute('poster');
+            if (src && assets[src]) node.setAttribute('src', assets[src]);
+            if (poster && assets[poster]) node.setAttribute('poster', assets[poster]);
+          });
+        } catch {
+          /* Local asset preview is best-effort only. */
+        }
+      }
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', applyLocalAssets, { once: true });
+      else applyLocalAssets();
+    }());
+  </script>`;
+}
+
 function assetBaseFromUrl(sourceUrl: string): string {
   return new URL('.', new URL(sourceUrl, window.location.href)).href;
 }
@@ -122,8 +147,9 @@ export function composeFrameHtml(block: SiteBlock, editor = false): string | und
   const runtime = `window.csmv2RunAction=function(name,event,element){if(event){event.preventDefault();event.stopPropagation();}var fn=window[name];if(typeof fn==="function"){var result=fn.call(element||window,event,element);return result===undefined?false:result;}console.warn("CSMV2 action not found:",name);return false;};`;
   const scripts = !editor ? [
     block.htmlJs ? `<script data-csmv2-user-js>${runtime}\n${escapeScriptText(block.htmlJs)}</script>` : '',
+    localAssetScript(),
     frameReadyScript(),
-  ].filter(Boolean).join('\n') : '';
+  ].filter(Boolean).join('\n') : localAssetScript();
   let next = normalizeTemplateHtml(block.html);
   if (styles) {
     next = /<\/head>/i.test(next) ? next.replace(/<\/head>/i, `${styles}\n</head>`) : `${styles}\n${next}`;
@@ -136,7 +162,7 @@ export function composeFrameHtml(block: SiteBlock, editor = false): string | und
 
 export function serializeFrameDocument(documentRef: Document): string {
   const clone = documentRef.documentElement.cloneNode(true) as HTMLElement;
-  clone.querySelectorAll('[data-csmv2-user-css], [data-csmv2-user-js], [data-csmv2-editor-css], [data-csmv2-ready-script]').forEach((node) => node.remove());
+  clone.querySelectorAll('[data-csmv2-user-css], [data-csmv2-user-js], [data-csmv2-editor-css], [data-csmv2-ready-script], [data-csmv2-local-assets]').forEach((node) => node.remove());
   clone.querySelectorAll('[data-csmv2-edit-id]').forEach((node) => {
     const element = node as HTMLElement;
     element.removeAttribute('data-csmv2-edit-id');
