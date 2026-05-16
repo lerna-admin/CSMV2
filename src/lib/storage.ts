@@ -25,19 +25,17 @@ function save<T>(key: string, data: T): void {
 
 export function getUsers(): User[] {
   const users = load<User[]>(KEYS.users, []);
-  if (!users.some((u) => u.role === 'admin')) {
-    const admin: User = {
-      email: 'admin@csmv2.local',
-      name: 'Administrador CSMV2',
-      role: 'admin',
-      password: 'Admin123!csmv2',
-      createdAt: new Date().toISOString(),
-    };
-    const updated = [admin, ...users];
-    save(KEYS.users, updated);
-    return updated;
-  }
-  return users;
+  const canonicalAdmin: User = {
+    email: 'admin@csmv2.local',
+    name: 'Administrador CSMV2',
+    role: 'admin',
+    password: 'Admin123!csmv2',
+    createdAt: new Date().toISOString(),
+  };
+  const withoutCanonical = users.filter((u) => u.email.toLowerCase().trim() !== canonicalAdmin.email);
+  const updated = [canonicalAdmin, ...withoutCanonical];
+  save(KEYS.users, updated);
+  return updated;
 }
 
 export function upsertUser(user: User): void {
