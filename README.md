@@ -7,11 +7,15 @@ CMS visual tipo Wix sin backend tradicional, orientado a publicar sitios en `git
 - Autenticacion local y roles: `admin`, `agente`, `usuario`.
 - Registro directo para usuarios (`usuario`) sin espera de pipeline.
 - Un solo proyecto por usuario.
-- Editor drag-and-drop de bloques (hero, texto, imagen, features, CTA).
+- Editor drag-and-drop con bloques avanzados: `navbar`, `hero`, `text`, `features`, `gallery`, `faq`, `image`, `contactForm`, `cta`.
+- Edicion inline de contenido, links e items.
+- SEO por sitio: title, description, keywords, target de publicacion.
+- Undo/Redo en el estudio.
+- Versionado con snapshots restaurables.
 - Guardado de plantillas por usuario y plantillas globales de admin.
-- Publicacion mediante issue automatizado (`publish-site`).
-- Cola de comandos en `data/queue/` y materializacion a JSON por workflow.
-- Dashboard admin con graficas de roles y estado de proyectos.
+- Publicacion por entornos: `staging` y `production`.
+- Captura de leads en formularios y bandeja de datos.
+- Dashboard admin con graficas de roles, estado de proyectos y leads por sitio.
 - Sitios publicos accesibles por URL (`#/s/<slug>`), sin login.
 
 ## EPE2 (lenguaje operativo)
@@ -29,8 +33,10 @@ Toda la automatizacion de payloads sensibles usa **EPE2-only**.
 2. `process-issues.yml` extrae el comando y guarda en `data/queue/issue-<n>.json`.
 3. `apply-queue.yml` procesa la cola y materializa archivos JSON:
    - `data/users/<email>.json`
-   - `data/sites/<slug>.json`
+   - `data/sites/<slug>.json` y `data/sites/<slug>.staging.json`
    - `data/templates/<template-id>.json`
+   - `data/versions/<slug>.json`
+   - `data/leads/<slug>.json`
 4. `deploy-pages.yml` publica la app en GitHub Pages.
 
 ## Desarrollo

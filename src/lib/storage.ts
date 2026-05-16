@@ -1,4 +1,4 @@
-import type { SiteProject, SiteTemplate, User } from '../types/domain';
+import type { FormLead, SiteProject, SiteTemplate, User } from '../types/domain';
 import { encryptEpe2 } from './epe2';
 
 const KEYS = {
@@ -6,6 +6,7 @@ const KEYS = {
   users: 'csmv2_users',
   projects: 'csmv2_projects',
   templates: 'csmv2_templates',
+  leads: 'csmv2_leads',
 };
 
 function load<T>(key: string, fallback: T): T {
@@ -61,6 +62,14 @@ export function getTemplates(): SiteTemplate[] {
 export function upsertTemplate(template: SiteTemplate): void {
   const next = getTemplates().filter((t) => t.id !== template.id).concat(template);
   save(KEYS.templates, next);
+}
+
+export function getLeads(): FormLead[] {
+  return load<FormLead[]>(KEYS.leads, []);
+}
+
+export function pushLead(lead: FormLead): void {
+  save(KEYS.leads, [lead, ...getLeads()]);
 }
 
 export function setSession(email: string): void {

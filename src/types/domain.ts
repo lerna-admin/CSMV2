@@ -8,7 +8,7 @@ export type User = {
   createdAt: string;
 };
 
-export type BlockType = 'hero' | 'text' | 'image' | 'cta' | 'features';
+export type BlockType = 'hero' | 'text' | 'image' | 'cta' | 'features' | 'navbar' | 'gallery' | 'faq' | 'contactForm';
 
 export type SiteBlock = {
   id: string;
@@ -18,6 +18,22 @@ export type SiteBlock = {
   image?: string;
   buttonText?: string;
   buttonUrl?: string;
+  items?: string[];
+};
+
+export type SeoConfig = {
+  title: string;
+  description: string;
+  keywords: string[];
+  ogImage?: string;
+};
+
+export type SiteVersion = {
+  id: string;
+  createdAt: string;
+  label: string;
+  blocks: SiteBlock[];
+  seo: SeoConfig;
 };
 
 export type SiteTemplate = {
@@ -30,6 +46,15 @@ export type SiteTemplate = {
   publicTemplate: boolean;
 };
 
+export type FormLead = {
+  id: string;
+  siteSlug: string;
+  name: string;
+  email: string;
+  message: string;
+  createdAt: string;
+};
+
 export type SiteProject = {
   id: string;
   ownerEmail: string;
@@ -40,4 +65,7 @@ export type SiteProject = {
   templateId?: string;
   updatedAt: string;
   blocks: SiteBlock[];
+  seo: SeoConfig;
+  versions: SiteVersion[];
+  publishTarget: 'staging' | 'production';
 };

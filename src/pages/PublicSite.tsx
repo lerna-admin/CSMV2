@@ -1,13 +1,30 @@
-import { useMemo } from 'react';
+import { FormEvent, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { getProjects } from '../lib/storage';
+import { getProjects, issueUrl, pushLead } from '../lib/storage';
 
 export default function PublicSite() {
   const { slug = '' } = useParams();
+  const [sent, setSent] = useState(false);
   const site = useMemo(() => getProjects().find((p) => p.slug === slug && p.status === 'published') || null, [slug]);
 
-  if (!site) {
-    return <main className="public-site"><h1>Sitio no disponible</h1></main>;
+  if (!site) return <main className="public-site"><h1>Sitio no disponible</h1></main>;
+
+  function submitLead(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!site) return;
+    const form = new FormData(event.currentTarget);
+    const lead = {
+      id: crypto.randomUUID(),
+      siteSlug: site.slug,
+      name: String(form.get('name') || ''),
+      email: String(form.get('email') || ''),
+      message: String(form.get('message') || ''),
+      createdAt: new Date().toISOString(),
+    };
+    pushLead(lead);
+    window.open(issueUrl('submit-lead', lead), '_blank', 'noopener,noreferrer');
+    setSent(true);
+    event.currentTarget.reset();
   }
 
   return (
@@ -16,8 +33,20 @@ export default function PublicSite() {
         <section key={block.id} className={`b-${block.type}`}>
           <h2>{block.title}</h2>
           <p>{block.content}</p>
+          {block.type === 'navbar' && <nav className="nav-inline">{(block.items || []).map((item) => <a key={item} href="#">{item}</a>)}</nav>}
+          {block.type === 'gallery' && <div className="gallery-grid">{(block.items || []).map((img) => <img key={img} src={img} alt="gallery" />)}</div>}
+          {block.type === 'faq' && <div>{(block.items || []).map((qa) => <p key={qa}>{qa}</p>)}</div>}
           {block.image && <img src={block.image} alt={block.title} />}
           {block.buttonText && <a href={block.buttonUrl || '#'}>{block.buttonText}</a>}
+          {block.type === 'contactForm' && (
+            <form className="lead-form" onSubmit={submitLead}>
+              <input name="name" placeholder="Nombre" required />
+              <input name="email" placeholder="Email" type="email" required />
+              <textarea name="message" placeholder="Mensaje" required />
+              <button type="submit">Enviar</button>
+              {sent && <small>Mensaje enviado.</small>}
+            </form>
+          )}
         </section>
       ))}
     </main>
