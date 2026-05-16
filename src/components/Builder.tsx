@@ -26,7 +26,12 @@ const elementPalette: PaletteItem[] = [
   { type: 'features', title: 'Beneficios', content: 'Rapido, seguro, flexible', items: ['Sin backend', 'Publicacion GitHub', 'Plantillas'] },
   { type: 'gallery', title: 'Galeria', content: 'Muestra tus trabajos', items: ['https://picsum.photos/500/300', 'https://picsum.photos/501/300'] },
   { type: 'faq', title: 'FAQ', content: 'Preguntas frecuentes', items: ['Que incluye?:Editor visual completo', 'Como publico?:Con GitHub Actions'] },
+  { type: 'carousel', title: 'Carrusel', content: 'Slides principales del sitio', items: ['https://picsum.photos/1200/700?1|Bienestar premium|Experiencias pensadas para convertir', 'https://picsum.photos/1200/700?2|Resultados visibles|Campanas visuales con narrativa clara'] },
+  { type: 'table', title: 'Tabla', content: 'Comparativa de servicios y precios', items: ['Servicio|Duracion|Precio', 'Masaje relajante|60 min|$80', 'Facial premium|45 min|$65'] },
+  { type: 'pricing', title: 'Precios', content: 'Planes comerciales o paquetes destacados', items: ['Starter|$19/mes|1 sitio,Soporte base,Analitica esencial', 'Growth|$49/mes|3 sitios,SEO avanzado,Automatizaciones'] },
+  { type: 'testimonials', title: 'Testimonios', content: 'Prueba social para aumentar conversion', items: ['Ana Torres|CEO de Wellness|Duplicamos conversiones en dos semanas', 'Luis Mejia|Founder de Studio Norte|El editor nos ahorro horas cada semana'] },
   { type: 'image', title: 'Imagen', content: 'Hero visual', image: 'https://picsum.photos/1200/700' },
+  { type: 'video', title: 'Video', content: 'Presentacion del producto o demo principal', embedUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', image: 'https://picsum.photos/1200/700?video' },
   { type: 'html', title: 'HTML embebido', content: 'Iframe o HTML completo', embedUrl: `${import.meta.env.BASE_URL}templates/labspa/index.html` },
   { type: 'contactForm', title: 'Formulario', content: 'Recibe leads desde tu landing' },
   { type: 'cta', title: 'Llamado a la accion', content: 'Convierte visitas en clientes', buttonText: 'Contactar', buttonUrl: '#' },
@@ -82,16 +87,28 @@ type HtmlNodeSelection = {
   label: string;
   text: string;
   href: string;
+  src: string;
+  alt: string;
+  title: string;
+  target: string;
+  idValue: string;
+  className: string;
+  inlineStyle: string;
   onclick: string;
   actionName: string;
+  cssText: string;
+  attributesText: string;
+  eventsText: string;
+  ancestryText: string;
+  parentEditId: string;
 };
+
+const HTML_EVENT_ATTRIBUTES = ['onclick', 'ondblclick', 'onchange', 'oninput', 'onsubmit', 'onfocus', 'onblur', 'onmouseenter', 'onmouseleave', 'onmouseover', 'onmouseout', 'onkeydown', 'onkeyup'];
 
 function getEditableHtmlTarget(target: EventTarget | null): HTMLElement | null {
   const element = target as HTMLElement | null;
   if (!element || typeof element.closest !== 'function') return null;
-  const interactive = element.closest<HTMLElement>('a,button,[role="button"],input[type="button"],input[type="submit"]');
-  if (interactive) return interactive;
-  return element.closest<HTMLElement>('h1,h2,h3,h4,h5,h6,p,span,li,label,small,strong,em') || element;
+  return element.closest<HTMLElement>('img,a,button,[role="button"],input,textarea,select,option,video,source,iframe,svg,path,section,article,div,h1,h2,h3,h4,h5,h6,p,span,li,label,small,strong,em') || element;
 }
 
 function isInputLike(element: HTMLElement): boolean {
@@ -118,14 +135,103 @@ function setElementText(element: HTMLElement, value: string): void {
 
 function getElementHref(element: HTMLElement): string {
   if (isAnchor(element)) return element.getAttribute('href') || '';
+  const anchor = element.closest('a');
+  if (anchor) return anchor.getAttribute('href') || '';
   if (element.tagName.toLowerCase() === 'button') return element.getAttribute('data-href') || '';
   return element.getAttribute('href') || element.getAttribute('data-href') || '';
 }
 
 function setElementHref(element: HTMLElement, value: string): void {
   if (isAnchor(element)) element.setAttribute('href', value || '#');
+  else if (element.closest('a')) element.closest('a')?.setAttribute('href', value || '#');
   else if (value) element.setAttribute('data-href', value);
   else element.removeAttribute('data-href');
+}
+
+function getElementSrc(element: HTMLElement): string {
+  if (['img', 'iframe', 'source', 'audio', 'video', 'script'].includes(element.tagName.toLowerCase())) {
+    return element.getAttribute('src') || '';
+  }
+  return '';
+}
+
+function setElementSrc(element: HTMLElement, value: string): void {
+  if (['img', 'iframe', 'source', 'audio', 'video', 'script'].includes(element.tagName.toLowerCase())) {
+    if (value.trim()) element.setAttribute('src', value.trim());
+    else element.removeAttribute('src');
+  }
+}
+
+function normalizeClassName(value: string): string {
+  return value.trim().split(/\s+/).filter(Boolean).join(' ');
+}
+
+function readMatchedCss(element: HTMLElement): string {
+  const doc = element.ownerDocument;
+  if (!doc) return '';
+  const matches: string[] = [];
+  for (const sheet of Array.from(doc.styleSheets)) {
+    let rules: CSSRuleList;
+    try {
+      rules = sheet.cssRules;
+    } catch {
+      continue;
+    }
+    for (const rule of Array.from(rules)) {
+      if (!(rule instanceof CSSStyleRule)) continue;
+      try {
+        if (element.matches(rule.selectorText)) matches.push(`${rule.selectorText} { ${rule.style.cssText} }`);
+      } catch {
+        /* Invalid selector from external libraries should not stop inspection. */
+      }
+    }
+  }
+  return matches.join('\n\n');
+}
+
+function formatElementLabel(element: HTMLElement): string {
+  return [
+    element.tagName.toLowerCase(),
+    element.id ? `#${element.id}` : '',
+    element.className ? `.${String(element.className).trim().split(/\s+/).slice(0, 2).join('.')}` : '',
+  ].join('');
+}
+
+function readElementAttributes(element: HTMLElement): string {
+  const pairs = Array.from(element.attributes)
+    .filter((attribute) => !['data-csmv2-edit-id', 'contenteditable'].includes(attribute.name))
+    .map((attribute) => `${attribute.name}="${attribute.value}"`);
+  return pairs.join('\n');
+}
+
+function readElementEvents(element: HTMLElement): string {
+  const entries: string[] = [];
+  let current: HTMLElement | null = element;
+  let depth = 0;
+  while (current && depth < 4) {
+    const events = HTML_EVENT_ATTRIBUTES
+      .map((name) => {
+        const value = current?.getAttribute(name) || '';
+        return value ? `${name}="${value}"` : '';
+      })
+      .filter(Boolean);
+    if (events.length) entries.push(`${formatElementLabel(current)}\n${events.join('\n')}`);
+    current = current.parentElement;
+    depth += 1;
+  }
+  return entries.join('\n\n');
+}
+
+function readElementAncestry(element: HTMLElement): string {
+  const path: string[] = [];
+  let current: HTMLElement | null = element;
+  let depth = 0;
+  while (current && current.tagName.toLowerCase() !== 'body' && depth < 6) {
+    path.push(formatElementLabel(current));
+    current = current.parentElement;
+    depth += 1;
+  }
+  return path.join('\n');
 }
 
 function actionNameFromOnclick(onclick: string): string {
@@ -137,12 +243,103 @@ function readHtmlNode(element: HTMLElement): HtmlNodeSelection {
   return {
     editId: element.dataset.csmv2EditId || '',
     tagName: element.tagName.toLowerCase(),
-    label: [element.tagName.toLowerCase(), element.id ? `#${element.id}` : '', element.className ? `.${String(element.className).trim().split(/\s+/).slice(0, 2).join('.')}` : ''].join(''),
+    label: formatElementLabel(element),
     text: getElementText(element),
     href: getElementHref(element),
+    src: getElementSrc(element),
+    alt: element.getAttribute('alt') || '',
+    title: element.getAttribute('title') || '',
+    target: isAnchor(element) ? element.getAttribute('target') || '' : element.closest('a')?.getAttribute('target') || '',
+    idValue: element.id || '',
+    className: normalizeClassName(element.className || ''),
+    inlineStyle: element.getAttribute('style') || '',
     onclick,
     actionName: element.dataset.csmv2Action || actionNameFromOnclick(onclick),
+    cssText: readMatchedCss(element),
+    attributesText: readElementAttributes(element),
+    eventsText: readElementEvents(element),
+    ancestryText: readElementAncestry(element),
+    parentEditId: element.parentElement?.dataset.csmv2EditId || '',
   };
+}
+
+function setElementAttribute(element: HTMLElement, attribute: string, value: string): void {
+  const nextValue = value.trim();
+  if (attribute === 'href') {
+    setElementHref(element, value);
+    return;
+  }
+  if (attribute === 'src') {
+    setElementSrc(element, value);
+    return;
+  }
+  if (attribute === 'class') {
+    if (nextValue) element.className = normalizeClassName(nextValue);
+    else element.removeAttribute('class');
+    return;
+  }
+  if (attribute === 'style') {
+    if (nextValue) element.setAttribute('style', nextValue);
+    else element.removeAttribute('style');
+    return;
+  }
+  if (attribute === 'id') {
+    element.id = nextValue;
+    if (!nextValue) element.removeAttribute('id');
+    return;
+  }
+  if (attribute === 'target' && !isAnchor(element) && element.closest('a')) {
+    const anchor = element.closest('a');
+    if (anchor) {
+      if (nextValue) anchor.setAttribute('target', nextValue);
+      else anchor.removeAttribute('target');
+    }
+    return;
+  }
+  if (attribute === 'title' && !isAnchor(element) && element.closest('a')?.querySelector('img') === element) {
+    if (nextValue) element.setAttribute('title', nextValue);
+    else element.removeAttribute('title');
+    return;
+  }
+  if (nextValue) element.setAttribute(attribute, nextValue);
+  else element.removeAttribute(attribute);
+}
+
+function parseTableRows(items?: string[]): string[][] {
+  return (items || [])
+    .map((row) => row.split('|').map((cell) => cell.trim()))
+    .filter((row) => row.some(Boolean));
+}
+
+function parseCarouselSlides(items?: string[]): Array<{ image: string; title: string; text: string }> {
+  return (items || [])
+    .map((item) => {
+      const [image = '', title = '', text = ''] = item.split('|');
+      return { image: image.trim(), title: title.trim(), text: text.trim() };
+    })
+    .filter((slide) => slide.image || slide.title || slide.text);
+}
+
+function parsePricingCards(items?: string[]): Array<{ name: string; price: string; features: string[] }> {
+  return (items || [])
+    .map((item) => {
+      const [name = '', price = '', featuresRaw = ''] = item.split('|');
+      return {
+        name: name.trim(),
+        price: price.trim(),
+        features: featuresRaw.split(',').map((feature) => feature.trim()).filter(Boolean),
+      };
+    })
+    .filter((card) => card.name || card.price || card.features.length);
+}
+
+function parseTestimonials(items?: string[]): Array<{ author: string; role: string; quote: string }> {
+  return (items || [])
+    .map((item) => {
+      const [author = '', role = '', quote = ''] = item.split('|');
+      return { author: author.trim(), role: role.trim(), quote: quote.trim() };
+    })
+    .filter((item) => item.author || item.role || item.quote);
 }
 
 function extractFunctionNames(js: string): string[] {
@@ -191,15 +388,19 @@ function EditableHtmlFrame({ block, onSave }: { block: SiteBlock; onSave: (patch
 
   useEffect(() => {
     setScriptDraft(block.htmlJs || '');
+    setSelectedNode(null);
   }, [block.id, block.htmlJs]);
 
   function prepareEditor(frame: HTMLIFrameElement) {
     const doc = frame.contentDocument;
     if (!doc || !srcDoc) return;
     doc.designMode = 'off';
-    doc.querySelectorAll<HTMLElement>('a,button,[role="button"],input[type="button"],input[type="submit"],h1,h2,h3,h4,h5,h6,p,span,li,label,small,strong,em').forEach((element, index) => {
+    doc.querySelectorAll<HTMLElement>('body *').forEach((element, index) => {
+      if (['script', 'style', 'link', 'meta', 'head', 'html', 'body'].includes(element.tagName.toLowerCase())) return;
       element.dataset.csmv2EditId = `node-${index}`;
-      if (!isInputLike(element)) element.setAttribute('contenteditable', 'true');
+      if (!isInputLike(element) && ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'span', 'li', 'label', 'small', 'strong', 'em', 'td', 'th', 'caption', 'button', 'a'].includes(element.tagName.toLowerCase())) {
+        element.setAttribute('contenteditable', 'true');
+      }
     });
     doc.addEventListener('click', (event) => {
       const element = getEditableHtmlTarget(event.target);
@@ -226,11 +427,28 @@ function EditableHtmlFrame({ block, onSave }: { block: SiteBlock; onSave: (patch
     return doc.querySelector<HTMLElement>(`[data-csmv2-edit-id="${selectedNode.editId}"]`);
   }
 
-  function patchSelectedElement(patch: Partial<Pick<HtmlNodeSelection, 'text' | 'href' | 'actionName'>>): void {
+  function selectNodeByEditId(editId: string): void {
+    const doc = frameRef.current?.contentDocument;
+    if (!doc || !editId) return;
+    const element = doc.querySelector<HTMLElement>(`[data-csmv2-edit-id="${editId}"]`);
+    if (!element) return;
+    doc.querySelectorAll('.csmv2-node-selected').forEach((node) => node.classList.remove('csmv2-node-selected'));
+    element.classList.add('csmv2-node-selected');
+    setSelectedNode(readHtmlNode(element));
+  }
+
+  function patchSelectedElement(patch: Partial<Pick<HtmlNodeSelection, 'text' | 'href' | 'src' | 'alt' | 'title' | 'target' | 'idValue' | 'className' | 'inlineStyle' | 'actionName'>>): void {
     const element = getSelectedElement();
     if (!element || !selectedNode) return;
     if (patch.text !== undefined) setElementText(element, patch.text);
-    if (patch.href !== undefined) setElementHref(element, patch.href);
+    if (patch.href !== undefined) setElementAttribute(element, 'href', patch.href);
+    if (patch.src !== undefined) setElementAttribute(element, 'src', patch.src);
+    if (patch.alt !== undefined) setElementAttribute(element, 'alt', patch.alt);
+    if (patch.title !== undefined) setElementAttribute(element, 'title', patch.title);
+    if (patch.target !== undefined) setElementAttribute(element, 'target', patch.target);
+    if (patch.idValue !== undefined) setElementAttribute(element, 'id', patch.idValue);
+    if (patch.className !== undefined) setElementAttribute(element, 'class', patch.className);
+    if (patch.inlineStyle !== undefined) setElementAttribute(element, 'style', patch.inlineStyle);
     if (patch.actionName !== undefined) {
       const action = patch.actionName.trim();
       if (action) {
@@ -282,25 +500,52 @@ function EditableHtmlFrame({ block, onSave }: { block: SiteBlock; onSave: (patch
       {srcDoc && (
         <div className="html-node-panel">
           <div className="html-node-head">
-            <strong>{selectedNode ? `Elemento: ${selectedNode.label}` : 'Selecciona un texto, link o boton dentro de la plantilla'}</strong>
+            <strong>{selectedNode ? `Elemento: ${selectedNode.label}` : 'Selecciona cualquier nodo visible dentro de la plantilla'}</strong>
             {selectedNode?.actionName && <span>Funcion conectada: {selectedNode.actionName}</span>}
           </div>
           {selectedNode ? (
             <>
-              <label>Texto visible<input value={selectedNode.text} onChange={(event) => patchSelectedElement({ text: event.target.value })} /></label>
-              <label>URL / destino<input value={selectedNode.href} onChange={(event) => patchSelectedElement({ href: event.target.value })} placeholder="#contacto, https://..., mailto:..." /></label>
               <div className="inline-fields">
+                <label>Tag<input value={selectedNode.tagName} readOnly /></label>
+                <label>ID<input value={selectedNode.idValue} onChange={(event) => patchSelectedElement({ idValue: event.target.value })} placeholder="hero-main" /></label>
+              </div>
+              <label>Class<input value={selectedNode.className} onChange={(event) => patchSelectedElement({ className: event.target.value })} placeholder="btn btn-primary" /></label>
+              <label>Style inline<textarea value={selectedNode.inlineStyle} onChange={(event) => patchSelectedElement({ inlineStyle: event.target.value })} placeholder="color:#111;background:#fff;" /></label>
+              <label>Texto visible<textarea value={selectedNode.text} onChange={(event) => patchSelectedElement({ text: event.target.value })} /></label>
+              <div className="inline-fields">
+                <label>URL / href<input value={selectedNode.href} onChange={(event) => patchSelectedElement({ href: event.target.value })} placeholder="#contacto, https://..., mailto:..." /></label>
+                <label>Source / src<input value={selectedNode.src} onChange={(event) => patchSelectedElement({ src: event.target.value })} placeholder="https://..." /></label>
+              </div>
+              <div className="inline-fields">
+                <label>Alt<input value={selectedNode.alt} onChange={(event) => patchSelectedElement({ alt: event.target.value })} placeholder="Descripcion de imagen" /></label>
+                <label>Title<input value={selectedNode.title} onChange={(event) => patchSelectedElement({ title: event.target.value })} placeholder="Tooltip o titulo" /></label>
+              </div>
+              <div className="inline-fields">
+                <label>Target<input value={selectedNode.target} onChange={(event) => patchSelectedElement({ target: event.target.value })} placeholder="_blank" /></label>
                 <label>Funcion<select value={selectedNode.actionName} onChange={(event) => patchSelectedElement({ actionName: event.target.value })}>
                   <option value="">Sin funcion</option>
                   {functionOptions.map((name) => <option key={name} value={name}>{name}</option>)}
                 </select></label>
+              </div>
+              <div className="inline-fields">
                 <label>Nueva funcion<input value={newFunctionName} onChange={(event) => setNewFunctionName(event.target.value)} placeholder="enviarLead" /></label>
+                <label>Onclick detectado<input value={selectedNode.onclick} readOnly /></label>
+              </div>
+              <div className="inline-fields">
+                <button type="button" disabled={!selectedNode.parentEditId} onClick={() => selectNodeByEditId(selectedNode.parentEditId)}>Seleccionar padre</button>
+                <div className="html-node-meta">
+                  <strong>Jerarquia</strong>
+                  <span>{selectedNode.label}</span>
+                </div>
               </div>
               <button type="button" onClick={addFunctionAndSelect}>Crear y conectar funcion</button>
-              <label>Onclick detectado<input value={selectedNode.onclick} readOnly /></label>
+              <label>Jerarquia del nodo<textarea value={selectedNode.ancestryText} readOnly placeholder="Nodo actual y ancestros" /></label>
+              <label>Eventos detectados<textarea value={selectedNode.eventsText} readOnly placeholder="Eventos inline del nodo y ancestros cercanos" /></label>
+              <label>Atributos detectados<textarea value={selectedNode.attributesText} readOnly placeholder="Atributos reales del nodo" /></label>
+              <label>CSS detectado<textarea value={selectedNode.cssText} readOnly placeholder="Reglas CSS asociadas por selector" /></label>
             </>
           ) : (
-            <p>En esta vista los botones no ejecutan acciones. La funcion solo se ejecutara en Visualizar o en el sitio publicado.</p>
+            <p>En esta vista los enlaces, botones y formularios no ejecutan acciones. El objetivo aqui es inspeccionar y editar atributos reales del HTML.</p>
           )}
           <label>Funciones JS del sitio<textarea value={scriptDraft} onChange={(event) => { setScriptDraft(event.target.value); setDirty(true); }} placeholder="function enviarLead(event, element) { return false; }" /></label>
         </div>
@@ -526,6 +771,51 @@ export default function Builder({ blocks, onChange, theme }: Props) {
                           )}
                           {block.buttonText && <span className="fake-button">{block.buttonText}</span>}
                           {block.type === 'gallery' && <div className="mini-gallery">{(block.items || []).slice(0, 3).map((img) => <img key={img} src={img} alt="" />)}</div>}
+                          {block.type === 'carousel' && (
+                            <div className="mini-carousel">
+                              {parseCarouselSlides(block.items).slice(0, 2).map((slide, index) => (
+                                <div key={`${block.id}-slide-${index}`} className="mini-carousel-slide">
+                                  {slide.image && <img src={slide.image} alt={slide.title || `slide-${index + 1}`} />}
+                                  <strong>{slide.title || `Slide ${index + 1}`}</strong>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          {block.type === 'table' && (
+                            <div className="mini-table">
+                              {parseTableRows(block.items).map((row, rowIndex) => (
+                                <div key={`${block.id}-row-${rowIndex}`} className="mini-table-row">
+                                  {row.map((cell, cellIndex) => <span key={`${block.id}-cell-${rowIndex}-${cellIndex}`}>{cell}</span>)}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          {block.type === 'pricing' && (
+                            <div className="mini-pricing">
+                              {parsePricingCards(block.items).slice(0, 2).map((card, index) => (
+                                <div key={`${block.id}-pricing-${index}`} className="mini-pricing-card">
+                                  <strong>{card.name || `Plan ${index + 1}`}</strong>
+                                  <span>{card.price}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          {block.type === 'testimonials' && (
+                            <div className="mini-testimonials">
+                              {parseTestimonials(block.items).slice(0, 2).map((item, index) => (
+                                <div key={`${block.id}-testimonial-${index}`} className="mini-testimonial">
+                                  <p>{item.quote}</p>
+                                  <strong>{item.author}</strong>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          {block.type === 'video' && (
+                            <div className="mini-video">
+                              {block.image && <img src={block.image} alt={block.title} />}
+                              <span>{block.embedUrl || 'Sin fuente de video'}</span>
+                            </div>
+                          )}
                         </article>
                       ))}
                     </div>
@@ -557,7 +847,25 @@ export default function Builder({ blocks, onChange, theme }: Props) {
             {(selected.type === 'gallery' || selected.type === 'faq' || selected.type === 'features' || selected.type === 'navbar') && (
               <label>Items<textarea value={(selected.items || []).join('\n')} onChange={(e) => commit(updateBlock(normalized, selected.id, { items: e.target.value.split('\n').filter(Boolean) }))} /></label>
             )}
+            {selected.type === 'carousel' && (
+              <label>Slides del carrusel<textarea value={(selected.items || []).join('\n')} onChange={(e) => commit(updateBlock(normalized, selected.id, { items: e.target.value.split('\n').filter(Boolean) }))} placeholder={'https://.../slide-1.jpg|Titulo 1|Texto 1\nhttps://.../slide-2.jpg|Titulo 2|Texto 2'} /></label>
+            )}
+            {selected.type === 'table' && (
+              <label>Filas de tabla<textarea value={(selected.items || []).join('\n')} onChange={(e) => commit(updateBlock(normalized, selected.id, { items: e.target.value.split('\n').filter(Boolean) }))} placeholder={'Encabezado 1|Encabezado 2|Encabezado 3\nFila 1 col 1|Fila 1 col 2|Fila 1 col 3'} /></label>
+            )}
+            {selected.type === 'pricing' && (
+              <label>Tarjetas de precio<textarea value={(selected.items || []).join('\n')} onChange={(e) => commit(updateBlock(normalized, selected.id, { items: e.target.value.split('\n').filter(Boolean) }))} placeholder={'Starter|$19/mes|Feature 1,Feature 2,Feature 3\nGrowth|$49/mes|Feature A,Feature B,Feature C'} /></label>
+            )}
+            {selected.type === 'testimonials' && (
+              <label>Testimonios<textarea value={(selected.items || []).join('\n')} onChange={(e) => commit(updateBlock(normalized, selected.id, { items: e.target.value.split('\n').filter(Boolean) }))} placeholder={'Ana Torres|CEO de Wellness|La plataforma nos ayudo a vender mas\nLuis Mejia|Founder|El editor es rapido y claro'} /></label>
+            )}
             {selected.type === 'image' && <label>Imagen<input value={selected.image || ''} onChange={(e) => commit(updateBlock(normalized, selected.id, { image: e.target.value }))} /></label>}
+            {selected.type === 'video' && (
+              <>
+                <label>URL del video<input value={selected.embedUrl || ''} onChange={(e) => commit(updateBlock(normalized, selected.id, { embedUrl: e.target.value }))} placeholder="https://www.youtube.com/watch?v=... o https://cdn.../video.mp4" /></label>
+                <label>Poster / portada<input value={selected.image || ''} onChange={(e) => commit(updateBlock(normalized, selected.id, { image: e.target.value }))} placeholder="https://..." /></label>
+              </>
+            )}
             {selected.type === 'html' && (
               <>
                 <label>URL original<input value={selected.sourceUrl || selected.embedUrl || ''} onChange={(e) => commit(updateBlock(normalized, selected.id, { embedUrl: e.target.value, sourceUrl: e.target.value }))} /></label>

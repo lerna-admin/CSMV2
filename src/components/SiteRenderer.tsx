@@ -19,6 +19,151 @@ function parseCssText(css?: string): CSSProperties | undefined {
   return Object.fromEntries(entries.map(([key, ...value]) => [key, value.join(':')])) as CSSProperties;
 }
 
+function parseTableRows(items?: string[]): string[][] {
+  return (items || [])
+    .map((row) => row.split('|').map((cell) => cell.trim()))
+    .filter((row) => row.some(Boolean));
+}
+
+function parseCarouselSlides(items?: string[]): Array<{ image: string; title: string; text: string }> {
+  return (items || [])
+    .map((item) => {
+      const [image = '', title = '', text = ''] = item.split('|');
+      return { image: image.trim(), title: title.trim(), text: text.trim() };
+    })
+    .filter((slide) => slide.image || slide.title || slide.text);
+}
+
+function parsePricingCards(items?: string[]): Array<{ name: string; price: string; features: string[] }> {
+  return (items || [])
+    .map((item) => {
+      const [name = '', price = '', featuresRaw = ''] = item.split('|');
+      return {
+        name: name.trim(),
+        price: price.trim(),
+        features: featuresRaw.split(',').map((feature) => feature.trim()).filter(Boolean),
+      };
+    })
+    .filter((card) => card.name || card.price || card.features.length);
+}
+
+function parseTestimonials(items?: string[]): Array<{ author: string; role: string; quote: string }> {
+  return (items || [])
+    .map((item) => {
+      const [author = '', role = '', quote = ''] = item.split('|');
+      return { author: author.trim(), role: role.trim(), quote: quote.trim() };
+    })
+    .filter((item) => item.author || item.role || item.quote);
+}
+
+function toVideoEmbedUrl(source?: string): string {
+  if (!source) return '';
+  const value = source.trim();
+  const youtubeWatch = value.match(/youtube\.com\/watch\?v=([^&]+)/i)?.[1];
+  if (youtubeWatch) return `https://www.youtube.com/embed/${youtubeWatch}`;
+  const youtubeShort = value.match(/youtu\.be\/([^?&]+)/i)?.[1];
+  if (youtubeShort) return `https://www.youtube.com/embed/${youtubeShort}`;
+  const vimeo = value.match(/vimeo\.com\/(\d+)/i)?.[1];
+  if (vimeo) return `https://player.vimeo.com/video/${vimeo}`;
+  return value;
+}
+
+function isDirectVideoFile(source?: string): boolean {
+  return !!source && /\.(mp4|webm|ogg)(\?.*)?$/i.test(source.trim());
+}
+
+function CarouselBlock({ block }: { block: SiteBlock }) {
+  const slides = parseCarouselSlides(block.items);
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  useEffect(() => {
+    setActiveIndex(0);
+  }, [block.id, block.items]);
+
+  if (!slides.length) return null;
+  const slide = slides[activeIndex] || slides[0];
+
+  return (
+    <div className="public-carousel">
+      <div className="public-carousel-stage">
+        {slide.image && <img src={slide.image} alt={slide.title || block.title} />}
+        <div className="public-carousel-copy">
+          <strong>{slide.title || block.title}</strong>
+          {slide.text && <p>{slide.text}</p>}
+        </div>
+      </div>
+      {slides.length > 1 && (
+        <div className="public-carousel-nav">
+          <button type="button" onClick={() => setActiveIndex((current) => (current - 1 + slides.length) % slides.length)}>Anterior</button>
+          <span>{activeIndex + 1} / {slides.length}</span>
+          <button type="button" onClick={() => setActiveIndex((current) => (current + 1) % slides.length)}>Siguiente</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function VideoBlock({ block }: { block: SiteBlock }) {
+  const source = toVideoEmbedUrl(block.embedUrl);
+  if (!source) return null;
+
+  if (isDirectVideoFile(source)) {
+    return (
+      <div className="public-video-wrap">
+        <video className="public-video" controls poster={block.image || undefined}>
+          <source src={source} />
+        </video>
+      </div>
+    );
+  }
+
+  return (
+    <div className="public-video-wrap">
+      <iframe
+        className="public-video"
+        title={block.title}
+        src={source}
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+        allowFullScreen
+      />
+    </div>
+  );
+}
+
+function PricingBlock({ block }: { block: SiteBlock }) {
+  const cards = parsePricingCards(block.items);
+  if (!cards.length) return null;
+  return (
+    <div className="public-pricing-grid">
+      {cards.map((card, index) => (
+        <article key={`${block.id}-pricing-${index}`} className="public-pricing-card">
+          <strong>{card.name || `Plan ${index + 1}`}</strong>
+          <span>{card.price}</span>
+          <ul>
+            {card.features.map((feature) => <li key={`${block.id}-pricing-${index}-${feature}`}>{feature}</li>)}
+          </ul>
+        </article>
+      ))}
+    </div>
+  );
+}
+
+function TestimonialsBlock({ block }: { block: SiteBlock }) {
+  const items = parseTestimonials(block.items);
+  if (!items.length) return null;
+  return (
+    <div className="public-testimonials-grid">
+      {items.map((item, index) => (
+        <article key={`${block.id}-testimonial-${index}`} className="public-testimonial-card">
+          <p>{item.quote}</p>
+          <strong>{item.author || `Cliente ${index + 1}`}</strong>
+          {item.role && <span>{item.role}</span>}
+        </article>
+      ))}
+    </div>
+  );
+}
+
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
@@ -274,7 +419,28 @@ export default function SiteRenderer({ blocks, siteSlug = 'preview', theme, onLe
         {block.type === 'navbar' && <nav className="nav-inline">{(block.items || []).map((item) => <a key={item} href="#">{item}</a>)}</nav>}
         {block.type === 'gallery' && <div className="gallery-grid">{(block.items || []).map((img) => <img key={img} src={img} alt="gallery" />)}</div>}
         {block.type === 'faq' && <div>{(block.items || []).map((qa) => <p key={qa}>{qa}</p>)}</div>}
-        {block.image && <img src={block.image} alt={block.title} />}
+        {block.type === 'carousel' && <CarouselBlock block={block} />}
+        {block.type === 'table' && (
+          <div className="public-table-wrap">
+            <table className="public-table">
+              <tbody>
+                {parseTableRows(block.items).map((row, rowIndex) => (
+                  <tr key={`${block.id}-row-${rowIndex}`}>
+                    {row.map((cell, cellIndex) => (
+                      rowIndex === 0
+                        ? <th key={`${block.id}-cell-${rowIndex}-${cellIndex}`}>{cell}</th>
+                        : <td key={`${block.id}-cell-${rowIndex}-${cellIndex}`}>{cell}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {block.type === 'video' && <VideoBlock block={block} />}
+        {block.type === 'pricing' && <PricingBlock block={block} />}
+        {block.type === 'testimonials' && <TestimonialsBlock block={block} />}
+        {block.image && block.type !== 'video' && <img src={block.image} alt={block.title} />}
         {block.buttonText && <a href={block.buttonUrl || '#'}>{block.buttonText}</a>}
         {block.type === 'contactForm' && (
           <form className="lead-form" onSubmit={submitLead}>
