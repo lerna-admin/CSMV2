@@ -540,6 +540,44 @@ button:disabled { opacity: .5; cursor: not-allowed; }
   border-color: var(--blue);
   color: #fff;
 }
+.html-node-panel {
+  display: grid;
+  gap: .65rem;
+  padding: .75rem;
+  border: 1px solid #d5dfef;
+  border-radius: 8px;
+  background: #f8fbff;
+}
+.html-node-head {
+  display: flex;
+  justify-content: space-between;
+  gap: .7rem;
+  flex-wrap: wrap;
+  color: #0f172a;
+}
+.html-node-head span {
+  color: var(--blue);
+  font-size: .82rem;
+  font-weight: 800;
+}
+.html-node-panel label {
+  display: grid;
+  gap: .28rem;
+  color: #374151;
+  font-size: .78rem;
+  font-weight: 800;
+}
+.html-node-panel textarea {
+  min-height: 130px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: .78rem;
+}
+.html-node-panel > button {
+  width: fit-content;
+  background: var(--wp);
+  color: #fff;
+  border-color: var(--wp);
+}
 .block-embed-preview {
   height: 220px;
   pointer-events: none;
@@ -782,6 +820,7 @@ button:disabled { opacity: .5; cursor: not-allowed; }
   .theme-panel,
   .create-site-panel,
   .theme-grid,
+  .html-node-panel .inline-fields,
   .inline-fields,
   .template-head { grid-template-columns: 1fr; }
   .builder-canvas { padding: .7rem; }

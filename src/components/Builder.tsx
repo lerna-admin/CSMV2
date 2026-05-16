@@ -1,5 +1,5 @@
 import { ArrowDown, ArrowUp, Copy, Eye, Layers, Monitor, Palette, Plus, Smartphone, Tablet, Trash2 } from 'lucide-react';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { composeFrameHtml, serializeFrameDocument } from '../lib/htmlTemplates';
 import type { SiteBlock, SiteTheme } from '../types/domain';
 
@@ -76,26 +76,188 @@ function cloneWithChildren(blocks: SiteBlock[], source: SiteBlock): SiteBlock[] 
   return blocks.concat(cloned, ...children);
 }
 
+type HtmlNodeSelection = {
+  editId: string;
+  tagName: string;
+  label: string;
+  text: string;
+  href: string;
+  onclick: string;
+  actionName: string;
+};
+
+function getEditableHtmlTarget(target: EventTarget | null): HTMLElement | null {
+  const element = target as HTMLElement | null;
+  if (!element || typeof element.closest !== 'function') return null;
+  const interactive = element.closest<HTMLElement>('a,button,[role="button"],input[type="button"],input[type="submit"]');
+  if (interactive) return interactive;
+  return element.closest<HTMLElement>('h1,h2,h3,h4,h5,h6,p,span,li,label,small,strong,em') || element;
+}
+
+function isInputLike(element: HTMLElement): boolean {
+  return ['input', 'textarea'].includes(element.tagName.toLowerCase());
+}
+
+function isAnchor(element: HTMLElement): boolean {
+  return element.tagName.toLowerCase() === 'a';
+}
+
+function getElementText(element: HTMLElement): string {
+  if (isInputLike(element)) return (element as HTMLInputElement | HTMLTextAreaElement).value;
+  return element.textContent?.trim() || '';
+}
+
+function setElementText(element: HTMLElement, value: string): void {
+  if (isInputLike(element)) {
+    (element as HTMLInputElement | HTMLTextAreaElement).value = value;
+    element.setAttribute('value', value);
+    return;
+  }
+  element.textContent = value;
+}
+
+function getElementHref(element: HTMLElement): string {
+  if (isAnchor(element)) return element.getAttribute('href') || '';
+  if (element.tagName.toLowerCase() === 'button') return element.getAttribute('data-href') || '';
+  return element.getAttribute('href') || element.getAttribute('data-href') || '';
+}
+
+function setElementHref(element: HTMLElement, value: string): void {
+  if (isAnchor(element)) element.setAttribute('href', value || '#');
+  else if (value) element.setAttribute('data-href', value);
+  else element.removeAttribute('data-href');
+}
+
+function actionNameFromOnclick(onclick: string): string {
+  return onclick.match(/csmv2RunAction\(['"]([^'"]+)['"]/)?.[1] || onclick.match(/(?:return\s+)?(?:window\.)?([A-Za-z_$][\w$]*)\s*\(/)?.[1] || '';
+}
+
+function readHtmlNode(element: HTMLElement): HtmlNodeSelection {
+  const onclick = element.getAttribute('onclick') || '';
+  return {
+    editId: element.dataset.csmv2EditId || '',
+    tagName: element.tagName.toLowerCase(),
+    label: [element.tagName.toLowerCase(), element.id ? `#${element.id}` : '', element.className ? `.${String(element.className).trim().split(/\s+/).slice(0, 2).join('.')}` : ''].join(''),
+    text: getElementText(element),
+    href: getElementHref(element),
+    onclick,
+    actionName: element.dataset.csmv2Action || actionNameFromOnclick(onclick),
+  };
+}
+
+function extractFunctionNames(js: string): string[] {
+  const names = new Set<string>();
+  const patterns = [
+    /function\s+([A-Za-z_$][\w$]*)\s*\(/g,
+    /(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?(?:function\b|\([^)]*\)\s*=>|[A-Za-z_$][\w$]*\s*=>)/g,
+    /window\.([A-Za-z_$][\w$]*)\s*=/g,
+  ];
+  for (const pattern of patterns) {
+    let match = pattern.exec(js);
+    while (match) {
+      if (match[1]) names.add(match[1]);
+      match = pattern.exec(js);
+    }
+  }
+  return Array.from(names).sort();
+}
+
+function extractInlineScripts(html?: string): string {
+  if (!html) return '';
+  const scripts: string[] = [];
+  const pattern = /<script\b[^>]*>([\s\S]*?)<\/script>/gi;
+  let match = pattern.exec(html);
+  while (match) {
+    scripts.push(match[1] || '');
+    match = pattern.exec(html);
+  }
+  return scripts.join('\n');
+}
+
+function safeFunctionName(value: string): string {
+  const cleaned = value.trim().replace(/[^A-Za-z0-9_$]/g, '_').replace(/^([^A-Za-z_$])/, '_$1');
+  return cleaned || `accion_${Date.now()}`;
+}
+
 function EditableHtmlFrame({ block, onSave }: { block: SiteBlock; onSave: (patch: Partial<SiteBlock>) => void }) {
   const frameRef = useRef<HTMLIFrameElement>(null);
   const [dirty, setDirty] = useState(false);
+  const [selectedNode, setSelectedNode] = useState<HtmlNodeSelection | null>(null);
+  const [scriptDraft, setScriptDraft] = useState(block.htmlJs || '');
+  const [newFunctionName, setNewFunctionName] = useState('');
   const srcDoc = composeFrameHtml(block, true);
+  const functionNames = useMemo(() => extractFunctionNames(`${extractInlineScripts(block.html)}\n${scriptDraft}`), [block.html, scriptDraft]);
+  const functionOptions = selectedNode?.actionName && !functionNames.includes(selectedNode.actionName) ? [selectedNode.actionName, ...functionNames] : functionNames;
+
+  useEffect(() => {
+    setScriptDraft(block.htmlJs || '');
+  }, [block.id, block.htmlJs]);
 
   function prepareEditor(frame: HTMLIFrameElement) {
     const doc = frame.contentDocument;
     if (!doc || !srcDoc) return;
-    doc.designMode = 'on';
-    doc.body?.querySelectorAll('a').forEach((link) => {
-      link.addEventListener('click', (event) => event.preventDefault());
+    doc.designMode = 'off';
+    doc.querySelectorAll<HTMLElement>('a,button,[role="button"],input[type="button"],input[type="submit"],h1,h2,h3,h4,h5,h6,p,span,li,label,small,strong,em').forEach((element, index) => {
+      element.dataset.csmv2EditId = `node-${index}`;
+      if (!isInputLike(element)) element.setAttribute('contenteditable', 'true');
     });
-    doc.addEventListener('input', () => setDirty(true));
-    doc.addEventListener('keyup', () => setDirty(true));
+    doc.addEventListener('click', (event) => {
+      const element = getEditableHtmlTarget(event.target);
+      if (!element) return;
+      if (element.closest('a,button,[role="button"],input[type="button"],input[type="submit"]')) event.preventDefault();
+      doc.querySelectorAll('.csmv2-node-selected').forEach((node) => node.classList.remove('csmv2-node-selected'));
+      element.classList.add('csmv2-node-selected');
+      setSelectedNode(readHtmlNode(element));
+    }, true);
+    doc.addEventListener('submit', (event) => event.preventDefault(), true);
+    doc.addEventListener('input', (event) => {
+      setDirty(true);
+      const element = getEditableHtmlTarget(event.target);
+      if (element?.dataset.csmv2EditId) setSelectedNode(readHtmlNode(element));
+    });
+  }
+
+  function getSelectedElement(): HTMLElement | null {
+    const doc = frameRef.current?.contentDocument;
+    if (!doc || !selectedNode) return null;
+    return doc.querySelector<HTMLElement>(`[data-csmv2-edit-id="${selectedNode.editId}"]`);
+  }
+
+  function patchSelectedElement(patch: Partial<Pick<HtmlNodeSelection, 'text' | 'href' | 'actionName'>>): void {
+    const element = getSelectedElement();
+    if (!element || !selectedNode) return;
+    if (patch.text !== undefined) setElementText(element, patch.text);
+    if (patch.href !== undefined) setElementHref(element, patch.href);
+    if (patch.actionName !== undefined) {
+      const action = patch.actionName.trim();
+      if (action) {
+        element.dataset.csmv2Action = action;
+        element.setAttribute('onclick', `return window.csmv2RunAction('${action}', event, this);`);
+      } else {
+        element.removeAttribute('data-csmv2-action');
+        if (actionNameFromOnclick(element.getAttribute('onclick') || '')) element.removeAttribute('onclick');
+      }
+    }
+    setSelectedNode(readHtmlNode(element));
+    setDirty(true);
+  }
+
+  function addFunctionAndSelect() {
+    const name = safeFunctionName(newFunctionName);
+    const existing = extractFunctionNames(scriptDraft);
+    const nextDraft = existing.includes(name)
+      ? scriptDraft
+      : `${scriptDraft.trim()}\n\nfunction ${name}(event, element) {\n  event.preventDefault();\n  console.log('${name}', element);\n  return false;\n}\n`.trim();
+    setScriptDraft(nextDraft);
+    setNewFunctionName('');
+    patchSelectedElement({ actionName: name });
+    setDirty(true);
   }
 
   function saveVisualChanges() {
     const doc = frameRef.current?.contentDocument;
     if (!doc) return;
-    onSave({ html: serializeFrameDocument(doc) });
+    onSave({ html: serializeFrameDocument(doc), htmlJs: scriptDraft });
     setDirty(false);
   }
 
@@ -107,12 +269,39 @@ function EditableHtmlFrame({ block, onSave }: { block: SiteBlock; onSave: (patch
         src={srcDoc ? undefined : block.embedUrl}
         srcDoc={srcDoc}
         scrolling="no"
+        sandbox="allow-same-origin"
         onLoad={(event) => prepareEditor(event.currentTarget)}
       />
       <div className="html-edit-toolbar">
-        <span>{srcDoc ? 'Edicion visual activa: haz clic dentro del sitio para cambiar textos.' : 'Este bloque usa una URL externa. Usa una plantilla desde el catalogo para editarla.'}</span>
+        <span>{srcDoc ? 'Modo edicion: scripts, enlaces y formularios quedan bloqueados. Selecciona textos o botones para editarlos.' : 'Este bloque usa una URL externa. Usa una plantilla desde el catalogo para editarla.'}</span>
         <button type="button" disabled={!srcDoc} onClick={saveVisualChanges}>{dirty ? 'Guardar cambios visuales' : 'Guardar HTML'}</button>
       </div>
+      {srcDoc && (
+        <div className="html-node-panel">
+          <div className="html-node-head">
+            <strong>{selectedNode ? `Elemento: ${selectedNode.label}` : 'Selecciona un texto, link o boton dentro de la plantilla'}</strong>
+            {selectedNode?.actionName && <span>Funcion conectada: {selectedNode.actionName}</span>}
+          </div>
+          {selectedNode ? (
+            <>
+              <label>Texto visible<input value={selectedNode.text} onChange={(event) => patchSelectedElement({ text: event.target.value })} /></label>
+              <label>URL / destino<input value={selectedNode.href} onChange={(event) => patchSelectedElement({ href: event.target.value })} placeholder="#contacto, https://..., mailto:..." /></label>
+              <div className="inline-fields">
+                <label>Funcion<select value={selectedNode.actionName} onChange={(event) => patchSelectedElement({ actionName: event.target.value })}>
+                  <option value="">Sin funcion</option>
+                  {functionOptions.map((name) => <option key={name} value={name}>{name}</option>)}
+                </select></label>
+                <label>Nueva funcion<input value={newFunctionName} onChange={(event) => setNewFunctionName(event.target.value)} placeholder="enviarLead" /></label>
+              </div>
+              <button type="button" onClick={addFunctionAndSelect}>Crear y conectar funcion</button>
+              <label>Onclick detectado<input value={selectedNode.onclick} readOnly /></label>
+            </>
+          ) : (
+            <p>En esta vista los botones no ejecutan acciones. La funcion solo se ejecutara en Visualizar o en el sitio publicado.</p>
+          )}
+          <label>Funciones JS del sitio<textarea value={scriptDraft} onChange={(event) => { setScriptDraft(event.target.value); setDirty(true); }} placeholder="function enviarLead(event, element) { return false; }" /></label>
+        </div>
+      )}
       <p>{block.content}</p>
     </div>
   );
