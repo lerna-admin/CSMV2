@@ -24,11 +24,14 @@ export type PlatformSettings = {
   updatedBy: string;
 };
 
-export type BlockType = 'hero' | 'text' | 'image' | 'cta' | 'features' | 'navbar' | 'gallery' | 'faq' | 'contactForm';
+export type BlockType = 'section' | 'hero' | 'text' | 'image' | 'cta' | 'features' | 'navbar' | 'gallery' | 'faq' | 'contactForm';
+export type NodeType = 'section' | 'element';
 
 export type SiteBlock = {
   id: string;
   type: BlockType;
+  nodeType?: NodeType;
+  parentId?: string;
   title: string;
   content: string;
   image?: string;

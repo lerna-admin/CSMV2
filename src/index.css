@@ -23,10 +23,16 @@ input, textarea, select { width: 100%; padding: .62rem .75rem; border: 1px solid
 .workspace-head .actions button, .versions .actions button { background:#eaf2ff; border:1px solid #bed2ff; border-radius:10px; padding:.6rem .8rem; }
 .seo-grid { display:grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap:.6rem; }
 
-.builder { display:grid; gap: 1rem; }
-.presets { display:grid; grid-template-columns: repeat(auto-fit,minmax(8.5rem,1fr)); gap:.6rem; }
-.presets button, .workspace button, .template-list button { background:#f0f5ff; border:1px solid #c6d8ff; border-radius:10px; padding:.65rem .8rem; }
-.canvas { display:grid; gap:.65rem; }
+.workspace button, .template-list button { background:#f0f5ff; border:1px solid #c6d8ff; border-radius:10px; padding:.65rem .8rem; }
+.builder-shell { display:grid; grid-template-columns: 17rem 1fr; gap: .9rem; }
+.builder-sidebar { background:#f8fbff; border:1px solid #dbe8ff; border-radius:12px; padding:.75rem; display:grid; gap:.55rem; align-content:start; max-height: 80vh; overflow:auto; }
+.palette-item { border:1px dashed #b3c7ee; padding:.55rem .65rem; border-radius:10px; background:#fff; font-weight:600; }
+.builder-canvas { background:#fcfdff; border:1px solid #dbe8ff; border-radius:12px; padding:.75rem; display:grid; gap:.75rem; min-height: 20rem; }
+.builder-canvas header { display:grid; gap:.2rem; }
+.canvas-section { border:1px solid #d5e0f4; border-radius:12px; padding:.7rem; background:#fff; display:grid; gap:.5rem; }
+.section-head { display:flex; justify-content:space-between; gap:.5rem; align-items:center; }
+.section-children { border:1px dashed #d4dff2; border-radius:10px; padding:.55rem; display:grid; gap:.55rem; background:#f8fbff; }
+.drop-empty { padding:.7rem; border-radius:8px; color:#4e5f7f; background:#eef4ff; border:1px dashed #bfd0f1; }
 .block-card { border:1px solid #e2e8f0; border-radius:12px; padding:.8rem; background:#fff; display:grid; gap:.5rem; }
 .block-card header { display:flex; justify-content:space-between; gap:.5rem; }
 .inline-fields { display:grid; grid-template-columns: 1fr 1fr; gap:.5rem; }
@@ -51,6 +57,7 @@ input, textarea, select { width: 100%; padding: .62rem .75rem; border: 1px solid
 @media (max-width: 1024px) {
   .charts-grid { grid-template-columns: 1fr; }
   .seo-grid { grid-template-columns: 1fr; }
+  .builder-shell { grid-template-columns: 1fr; }
 }
 @media (max-width: 768px) {
   .topbar { align-items:flex-start; flex-direction:column; gap:.7rem; }
