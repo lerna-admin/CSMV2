@@ -4,6 +4,10 @@ import SiteRenderer from '../components/SiteRenderer';
 import { enqueueCommand, getProjects, pushLead } from '../lib/storage';
 import type { SiteProject } from '../types/domain';
 
+type SitesIndex = {
+  files?: string[];
+};
+
 export default function PublicSite() {
   const { slug = '' } = useParams();
   const [site, setSite] = useState<SiteProject | null>(() => getProjects().find((p) => p.slug === slug && p.status === 'published') || null);
@@ -13,10 +17,23 @@ export default function PublicSite() {
     let active = true;
     const localSite = getProjects().find((p) => p.slug === slug && p.status === 'published') || null;
     setSite(localSite);
-    setLoading(true);
-    fetch(`${import.meta.env.BASE_URL}data/sites/${encodeURIComponent(slug)}.json?ts=${Date.now()}`, { cache: 'no-store' })
-      .then((response) => (response.ok ? response.json() : null))
-      .then((remoteSite: SiteProject | null) => {
+    setLoading(!localSite);
+
+    async function loadRemoteSite() {
+      const indexResponse = await fetch(`${import.meta.env.BASE_URL}data/sites/index.json?ts=${Date.now()}`, { cache: 'no-store' }).catch(() => null);
+      if (!indexResponse?.ok) return null;
+
+      const index = await indexResponse.json() as SitesIndex;
+      const fileName = `${slug}.json`;
+      if (!index.files?.includes(fileName)) return null;
+
+      const siteResponse = await fetch(`${import.meta.env.BASE_URL}data/sites/${encodeURIComponent(slug)}.json?ts=${Date.now()}`, { cache: 'no-store' }).catch(() => null);
+      if (!siteResponse?.ok) return null;
+      return await siteResponse.json() as SiteProject;
+    }
+
+    void loadRemoteSite()
+      .then((remoteSite) => {
         if (active && remoteSite?.status === 'published') setSite(remoteSite);
       })
       .finally(() => {

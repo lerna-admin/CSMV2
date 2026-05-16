@@ -43,7 +43,7 @@ async function appendJson(filePath, data) {
 
 async function rebuildIndex(dirPath, indexPath) {
   const files = (await fs.readdir(dirPath).catch(() => []))
-    .filter((name) => name.endsWith('.json'))
+    .filter((name) => name.endsWith('.json') && name !== 'index.json')
     .sort();
   await upsertJson(indexPath, { updatedAt: new Date().toISOString(), count: files.length, files });
 }
