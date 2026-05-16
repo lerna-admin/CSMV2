@@ -141,6 +141,22 @@ export default function AppShell() {
     }
   }
 
+  async function startTemplateFromBase(template: SiteTemplate) {
+    setTemplateLoadingId(template.id);
+    try {
+      const blocks = template.blocks.some((block) => block.type === 'html')
+        ? await materializeTemplateBlocks(template.blocks)
+        : cloneBlocksWithNewIds(template.blocks);
+      setEditingTemplateId('');
+      setTemplateName(`${template.name} copia`);
+      setTemplateBlocks(blocks);
+      setPreviewTemplateId('');
+      navigate('/app/templates');
+    } finally {
+      setTemplateLoadingId('');
+    }
+  }
+
   function saveSharedTemplate() {
     if (!templateName.trim()) return;
     const template = {
@@ -276,6 +292,19 @@ export default function AppShell() {
             <section className="template-studio">
               <h3>Crear plantilla</h3>
               <p>Vista independiente para construir plantillas sin ruido de administración.</p>
+              <div className="template-base-panel">
+                <h4>Basar en plantilla existente</h4>
+                <p>Elige una plantilla global o propia para crear una copia editable y guardarla como una nueva plantilla.</p>
+                <div className="template-list owned-template-list">
+                  {templates.map((tpl) => (
+                    <div key={tpl.id} className="template-card">
+                      <strong>{tpl.name}</strong>
+                      <button type="button" disabled={templateLoadingId === tpl.id} onClick={() => { void startTemplateFromBase(tpl); }}>{templateLoadingId === tpl.id ? 'Preparando...' : 'Usar como base'}</button>
+                      <button type="button" onClick={() => setPreviewTemplateId(tpl.id)}>Visualizar</button>
+                    </div>
+                  ))}
+                </div>
+              </div>
               {myTemplates.length > 0 && (
                 <div className="template-list owned-template-list">
                   {myTemplates.map((tpl) => (

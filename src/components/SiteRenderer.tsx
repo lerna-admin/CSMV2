@@ -1,4 +1,4 @@
-import { CSSProperties, FormEvent, useEffect, useMemo, useState } from 'react';
+import { CSSProperties, FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import type { FormLead, SiteBlock, SiteTheme } from '../types/domain';
 import { composeFrameHtml } from '../lib/htmlTemplates';
 
@@ -17,6 +17,125 @@ function parseCssText(css?: string): CSSProperties | undefined {
     .map((rule) => rule.split(':').map((part) => part.trim()))
     .filter((rule) => rule.length >= 2 && rule[0]);
   return Object.fromEntries(entries.map(([key, ...value]) => [key, value.join(':')])) as CSSProperties;
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+function waitForWindowLoad(frame: HTMLIFrameElement): Promise<void> {
+  const doc = frame.contentDocument;
+  const win = frame.contentWindow;
+  if (!doc || !win || doc.readyState === 'complete') return Promise.resolve();
+  return new Promise((resolve) => {
+    const timeout = window.setTimeout(resolve, 8000);
+    win.addEventListener('load', () => {
+      window.clearTimeout(timeout);
+      resolve();
+    }, { once: true });
+  });
+}
+
+function waitForReadyFlag(frame: HTMLIFrameElement): Promise<void> {
+  const doc = frame.contentDocument;
+  const win = frame.contentWindow as (Window & { __csmv2Ready?: boolean }) | null;
+  if (!doc || !win) return Promise.resolve();
+  if (win.__csmv2Ready || doc.documentElement.getAttribute('data-csmv2-ready') === 'true') return Promise.resolve();
+  return new Promise((resolve) => {
+    const startedAt = Date.now();
+    const timer = window.setInterval(() => {
+      if (win.__csmv2Ready || doc.documentElement.getAttribute('data-csmv2-ready') === 'true' || Date.now() - startedAt > 6500) {
+        window.clearInterval(timer);
+        resolve();
+      }
+    }, 80);
+  });
+}
+
+function waitForFrameAssets(frame: HTMLIFrameElement): Promise<void> {
+  const doc = frame.contentDocument;
+  if (!doc) return Promise.resolve();
+  const images = Array.from(doc.images || []).filter((img) => !img.complete);
+  const imageWait = images.length
+    ? Promise.race([
+      Promise.all(images.map((img) => new Promise<void>((resolve) => {
+        img.addEventListener('load', () => resolve(), { once: true });
+        img.addEventListener('error', () => resolve(), { once: true });
+      }))),
+      delay(4500),
+    ])
+    : Promise.resolve();
+  const fontWait = doc.fonts?.ready.then(() => undefined).catch(() => undefined) || Promise.resolve();
+  return Promise.all([imageWait, fontWait]).then(() => undefined);
+}
+
+async function waitForFrameReady(frame: HTMLIFrameElement): Promise<void> {
+  await waitForWindowLoad(frame);
+  await waitForReadyFlag(frame);
+  await waitForFrameAssets(frame);
+  await delay(140);
+}
+
+function stabilizeFrameRuntime(frame: HTMLIFrameElement): void {
+  try {
+    const win = frame.contentWindow as (Window & { jQuery?: unknown; $?: unknown }) | null;
+    if (!win) return;
+    win.dispatchEvent(new Event('resize'));
+    win.dispatchEvent(new Event('scroll'));
+    const maybeJquery = win.jQuery || win.$;
+    if (typeof maybeJquery === 'function') {
+      const jq = maybeJquery as (target: Window) => { trigger?: (eventName: string) => void };
+      jq(win).trigger?.('resize');
+      jq(win).trigger?.('scroll');
+    }
+  } catch {
+    /* Template scripts should never break the host renderer. */
+  }
+}
+
+function EmbeddedTemplateFrame({
+  block,
+  renderMode,
+  onFrameLoad,
+}: {
+  block: SiteBlock;
+  renderMode: 'preview' | 'public';
+  onFrameLoad: (frame: HTMLIFrameElement) => void;
+}) {
+  const [ready, setReady] = useState(renderMode !== 'public');
+  const mounted = useRef(true);
+  const srcDoc = composeFrameHtml(block);
+
+  useEffect(() => {
+    mounted.current = true;
+    setReady(renderMode !== 'public');
+    return () => { mounted.current = false; };
+  }, [block.id, block.html, block.embedUrl, renderMode]);
+
+  async function handleLoad(frame: HTMLIFrameElement) {
+    onFrameLoad(frame);
+    if (renderMode === 'public') {
+      await waitForFrameReady(frame);
+      stabilizeFrameRuntime(frame);
+      window.setTimeout(() => stabilizeFrameRuntime(frame), 250);
+      window.setTimeout(() => stabilizeFrameRuntime(frame), 1000);
+    }
+    if (mounted.current) setReady(true);
+  }
+
+  return (
+    <div className={`embedded-template-wrap ${renderMode === 'public' ? 'embedded-template-wrap-public' : ''}`}>
+      <iframe
+        title={block.title || 'Plantilla HTML'}
+        className={`embedded-template-frame ${renderMode === 'public' ? 'embedded-template-frame-public' : ''} ${ready ? 'embedded-template-frame-ready' : 'embedded-template-frame-loading'}`}
+        src={srcDoc ? undefined : block.embedUrl}
+        srcDoc={srcDoc}
+        scrolling={renderMode === 'public' ? 'auto' : 'no'}
+        onLoad={(event) => { void handleLoad(event.currentTarget); }}
+      />
+      {!ready && renderMode === 'public' && <div className="site-frame-loader">Cargando sitio y scripts...</div>}
+    </div>
+  );
 }
 
 export default function SiteRenderer({ blocks, siteSlug = 'preview', theme, onLead, renderMode = 'preview' }: Props) {
@@ -130,15 +249,11 @@ export default function SiteRenderer({ blocks, siteSlug = 'preview', theme, onLe
   }
 
   function renderEmbeddedTemplate(block: SiteBlock) {
-    const srcDoc = composeFrameHtml(block);
     return (
-      <iframe
-        title={block.title || 'Plantilla HTML'}
-        className={`embedded-template-frame ${renderMode === 'public' ? 'embedded-template-frame-public' : ''}`}
-        src={srcDoc ? undefined : block.embedUrl}
-        srcDoc={srcDoc}
-        scrolling={renderMode === 'public' ? 'auto' : 'no'}
-        onLoad={(event) => resizeFrame(event.currentTarget)}
+      <EmbeddedTemplateFrame
+        block={block}
+        renderMode={renderMode}
+        onFrameLoad={resizeFrame}
       />
     );
   }

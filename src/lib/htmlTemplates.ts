@@ -8,6 +8,47 @@ function escapeScriptText(js: string): string {
   return js.replace(/<\/script/gi, '<\\/script');
 }
 
+function frameReadyScript(): string {
+  return `<script data-csmv2-ready-script>
+    (function () {
+      if (window.__csmv2ReadyBootstrap) return;
+      window.__csmv2ReadyBootstrap = true;
+      window.__csmv2Ready = false;
+      function waitForImages() {
+        var images = Array.prototype.slice.call(document.images || []).filter(function (img) { return !img.complete; });
+        if (!images.length) return Promise.resolve();
+        return Promise.race([
+          Promise.all(images.map(function (img) {
+            return new Promise(function (resolve) {
+              img.addEventListener('load', resolve, { once: true });
+              img.addEventListener('error', resolve, { once: true });
+            });
+          })),
+          new Promise(function (resolve) { setTimeout(resolve, 4500); })
+        ]);
+      }
+      function waitForFonts() {
+        return document.fonts && document.fonts.ready ? document.fonts.ready.catch(function () {}) : Promise.resolve();
+      }
+      function markReady() {
+        document.documentElement.setAttribute('data-csmv2-ready', 'true');
+        window.__csmv2Ready = true;
+        window.dispatchEvent(new Event('resize'));
+        window.dispatchEvent(new Event('scroll'));
+      }
+      function settle() {
+        Promise.all([
+          waitForImages(),
+          waitForFonts(),
+          new Promise(function (resolve) { setTimeout(resolve, 180); })
+        ]).then(markReady).catch(markReady);
+      }
+      if (document.readyState === 'complete') setTimeout(settle, 0);
+      else window.addEventListener('load', settle, { once: true });
+    }());
+  </script>`;
+}
+
 function assetBaseFromUrl(sourceUrl: string): string {
   return new URL('.', new URL(sourceUrl, window.location.href)).href;
 }
@@ -79,7 +120,10 @@ export function composeFrameHtml(block: SiteBlock, editor = false): string | und
     </style>` : '',
   ].filter(Boolean).join('\n');
   const runtime = `window.csmv2RunAction=function(name,event,element){if(event){event.preventDefault();event.stopPropagation();}var fn=window[name];if(typeof fn==="function"){var result=fn.call(element||window,event,element);return result===undefined?false:result;}console.warn("CSMV2 action not found:",name);return false;};`;
-  const scripts = !editor && block.htmlJs ? `<script data-csmv2-user-js>${runtime}\n${escapeScriptText(block.htmlJs)}</script>` : '';
+  const scripts = !editor ? [
+    block.htmlJs ? `<script data-csmv2-user-js>${runtime}\n${escapeScriptText(block.htmlJs)}</script>` : '',
+    frameReadyScript(),
+  ].filter(Boolean).join('\n') : '';
   let next = normalizeTemplateHtml(block.html);
   if (styles) {
     next = /<\/head>/i.test(next) ? next.replace(/<\/head>/i, `${styles}\n</head>`) : `${styles}\n${next}`;
@@ -92,7 +136,7 @@ export function composeFrameHtml(block: SiteBlock, editor = false): string | und
 
 export function serializeFrameDocument(documentRef: Document): string {
   const clone = documentRef.documentElement.cloneNode(true) as HTMLElement;
-  clone.querySelectorAll('[data-csmv2-user-css], [data-csmv2-user-js], [data-csmv2-editor-css]').forEach((node) => node.remove());
+  clone.querySelectorAll('[data-csmv2-user-css], [data-csmv2-user-js], [data-csmv2-editor-css], [data-csmv2-ready-script]').forEach((node) => node.remove());
   clone.querySelectorAll('[data-csmv2-edit-id]').forEach((node) => {
     const element = node as HTMLElement;
     element.removeAttribute('data-csmv2-edit-id');
