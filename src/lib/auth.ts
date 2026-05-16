@@ -1,4 +1,5 @@
 import type { User } from '../types/domain';
+import { decryptEpe2, encryptEpe2 } from './epe2';
 import { getSession, getUsers, setSession, upsertUser } from './storage';
 
 function normalizeEmail(value: string): string {
@@ -14,7 +15,14 @@ export function currentUser(): User | null {
 export function login(email: string, password: string): User | null {
   const normalizedEmail = normalizeEmail(email);
   const normalizedPassword = String(password || '').trim();
-  const user = getUsers().find((u) => normalizeEmail(u.email) === normalizedEmail && String(u.password).trim() === normalizedPassword) || null;
+  const user = getUsers().find((u) => {
+    if (normalizeEmail(u.email) !== normalizedEmail) return false;
+    try {
+      return String(decryptEpe2(u.passwordEncrypted, normalizedEmail)).trim() === normalizedPassword;
+    } catch {
+      return false;
+    }
+  }) || null;
   if (user) setSession(user.email);
   return user;
 }
@@ -24,7 +32,13 @@ export function register(name: string, email: string, password: string): { ok: b
   const normalizedPassword = String(password || '').trim();
   const users = getUsers();
   if (users.some((u) => normalizeEmail(u.email) === normalizedEmail)) return { ok: false, error: 'El correo ya existe' };
-  upsertUser({ name: String(name || '').trim(), email: normalizedEmail, password: normalizedPassword, role: 'usuario', createdAt: new Date().toISOString() });
+  upsertUser({
+    name: String(name || '').trim(),
+    email: normalizedEmail,
+    passwordEncrypted: encryptEpe2(normalizedPassword, normalizedEmail),
+    role: 'usuario',
+    createdAt: new Date().toISOString(),
+  });
   setSession(normalizedEmail);
   return { ok: true };
 }

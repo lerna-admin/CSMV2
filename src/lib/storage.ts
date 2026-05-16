@@ -24,16 +24,36 @@ function save<T>(key: string, data: T): void {
 }
 
 export function getUsers(): User[] {
-  const users = load<User[]>(KEYS.users, []);
+  const users = load<Array<User & { password?: string }>>(KEYS.users, []);
   const canonicalAdmin: User = {
     email: 'admin@csmv2.local',
     name: 'Administrador CSMV2',
     role: 'admin',
-    password: 'Admin123!csmv2',
+    passwordEncrypted: encryptEpe2('Admin123!csmv2', 'admin@csmv2.local'),
     createdAt: new Date().toISOString(),
   };
-  const withoutCanonical = users.filter((u) => u.email.toLowerCase().trim() !== canonicalAdmin.email);
-  const updated = [canonicalAdmin, ...withoutCanonical];
+  const migratedUsers: User[] = users
+    .filter((u) => u.email.toLowerCase().trim() !== canonicalAdmin.email)
+    .map((u) => {
+      if (u.passwordEncrypted && String(u.passwordEncrypted).startsWith('EPE2:')) {
+        return {
+          email: String(u.email).trim().toLowerCase(),
+          name: u.name,
+          role: u.role,
+          passwordEncrypted: u.passwordEncrypted,
+          createdAt: u.createdAt,
+        };
+      }
+      const plain = String(u.password || '').trim();
+      return {
+        email: String(u.email).trim().toLowerCase(),
+        name: u.name,
+        role: u.role,
+        passwordEncrypted: encryptEpe2(plain, String(u.email).trim().toLowerCase()),
+        createdAt: u.createdAt,
+      };
+    });
+  const updated = [canonicalAdmin, ...migratedUsers];
   save(KEYS.users, updated);
   return updated;
 }
