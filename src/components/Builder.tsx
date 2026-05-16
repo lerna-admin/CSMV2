@@ -430,6 +430,11 @@ function EditableHtmlFrame({
       const element = getEditableHtmlTarget(event.target);
       if (element?.dataset.csmv2EditId) setSelectedNode(readHtmlNode(element));
     });
+    doc.addEventListener('focusout', (event) => {
+      const element = getEditableHtmlTarget(event.target);
+      if (!element?.dataset.csmv2EditId) return;
+      window.setTimeout(() => saveVisualChanges(), 0);
+    }, true);
   }
 
   function getSelectedElement(): HTMLElement | null {
@@ -509,7 +514,7 @@ function EditableHtmlFrame({
 
   function saveVisualChanges() {
     const doc = frameRef.current?.contentDocument;
-    if (!doc) return;
+    if (!doc || !dirty) return;
     onSave({ html: serializeFrameDocument(doc), htmlJs: scriptDraft });
     setDirty(false);
   }
@@ -526,8 +531,8 @@ function EditableHtmlFrame({
         onLoad={(event) => prepareEditor(event.currentTarget)}
       />
       <div className="html-edit-toolbar">
-        <span>{srcDoc ? 'Modo edicion: scripts, enlaces y formularios quedan bloqueados. Selecciona textos o botones para editarlos.' : 'Este bloque usa una URL externa. Usa una plantilla desde el catalogo para editarla.'}</span>
-        <button type="button" disabled={!srcDoc} onClick={saveVisualChanges}>{dirty ? 'Guardar cambios visuales' : 'Guardar HTML'}</button>
+        <span>{srcDoc ? 'Modo edicion: scripts, enlaces y formularios quedan bloqueados. Los cambios se guardan al salir del elemento o del campo JS.' : 'Este bloque usa una URL externa. Usa una plantilla desde el catalogo para editarla.'}</span>
+        <button type="button" disabled={!srcDoc} onClick={saveVisualChanges}>{dirty ? 'Guardar ahora' : 'HTML al dia'}</button>
       </div>
       {srcDoc && (
         <div className="html-node-panel">
@@ -584,7 +589,7 @@ function EditableHtmlFrame({
           ) : (
             <p>En esta vista los enlaces, botones y formularios no ejecutan acciones. El objetivo aqui es inspeccionar y editar atributos reales del HTML.</p>
           )}
-          <label>Funciones JS del sitio<textarea value={scriptDraft} onChange={(event) => { setScriptDraft(event.target.value); setDirty(true); }} placeholder="function enviarLead(event, element) { return false; }" /></label>
+          <label>Funciones JS del sitio<textarea value={scriptDraft} onChange={(event) => { setScriptDraft(event.target.value); setDirty(true); }} onBlur={saveVisualChanges} placeholder="function enviarLead(event, element) { return false; }" /></label>
         </div>
       )}
       <p>{block.content}</p>
