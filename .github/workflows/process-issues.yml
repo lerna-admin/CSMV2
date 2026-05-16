@@ -1,0 +1,55 @@
+name: Process CSMV2 Issues
+
+on:
+  issues:
+    types: [opened, edited, reopened]
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  process:
+    if: contains(join(github.event.issue.labels.*.name, ','), 'csm-command')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse issue
+        id: parse
+        shell: bash
+        run: |
+          set -euo pipefail
+          title='${{ github.event.issue.title }}'
+          body='${{ github.event.issue.body }}'
+          command=$(echo "$title" | sed -E 's/^\[CSMV2\] //')
+          payload=$(echo "$body" | awk '/^EPE2 payload:/{flag=1;next} flag{print}' | tr -d '\r')
+          if [[ -z "$payload" ]]; then
+            echo "No payload found" >&2
+            exit 1
+          fi
+          echo "command=$command" >> "$GITHUB_OUTPUT"
+          echo "payload=$payload" >> "$GITHUB_OUTPUT"
+
+      - name: Write command file
+        run: |
+          mkdir -p data/queue
+          issue_number='${{ github.event.issue.number }}'
+          printf '{"issue":%s,"command":"%s","payload":"%s","createdAt":"%s"}\n' \
+            "$issue_number" \
+            "${{ steps.parse.outputs.command }}" \
+            "${{ steps.parse.outputs.payload }}" \
+            "$(date -u +%FT%TZ)" > "data/queue/issue-${issue_number}.json"
+
+      - name: Commit queue update
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/queue
+          git commit -m "chore: process issue #${{ github.event.issue.number }}" || exit 0
+          git push
+
+      - name: Close issue
+        uses: peter-evans/close-issue@v3
+        with:
+          issue-number: ${{ github.event.issue.number }}
+          comment: "CSMV2 command received and queued for processing."
