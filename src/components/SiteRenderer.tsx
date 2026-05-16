@@ -19,9 +19,10 @@ function parseCssText(css?: string): CSSProperties | undefined {
 
 export default function SiteRenderer({ blocks, siteSlug = 'preview', theme, onLead }: Props) {
   const [sent, setSent] = useState(false);
-  const hasTree = blocks.some((b) => b.nodeType || b.type === 'section');
-  const sections = hasTree ? blocks.filter((b) => b.nodeType === 'section' || b.type === 'section') : [];
-  const looseBlocks = hasTree ? [] : blocks;
+  const hasTree = useMemo(() => blocks.some((b) => b.nodeType || b.type === 'section'), [blocks]);
+  const hasEmbeddedTemplate = useMemo(() => blocks.some((b) => b.type === 'html' && (b.embedUrl || b.html)), [blocks]);
+  const sections = useMemo(() => (hasTree ? blocks.filter((b) => b.nodeType === 'section' || b.type === 'section') : []), [blocks, hasTree]);
+  const looseBlocks = useMemo(() => (hasTree ? [] : blocks), [blocks, hasTree]);
   const pages = useMemo(
     () => Array.from(new Map(sections.map((s) => [s.pageId || 'home', s.pageName || 'Home'])).entries()).map(([id, name]) => ({ id, name })),
     [sections],
@@ -51,7 +52,46 @@ export default function SiteRenderer({ blocks, siteSlug = 'preview', theme, onLe
     event.currentTarget.reset();
   }
 
+  function resizeFrame(frame: HTMLIFrameElement) {
+    const update = () => {
+      try {
+        const doc = frame.contentDocument;
+        const height = Math.max(
+          doc?.body?.scrollHeight || 0,
+          doc?.documentElement?.scrollHeight || 0,
+          720,
+        );
+        frame.style.height = `${height}px`;
+      } catch {
+        frame.style.height = '4200px';
+      }
+    };
+    update();
+    window.setTimeout(update, 300);
+    window.setTimeout(update, 1800);
+  }
+
+  function renderEmbeddedTemplate(block: SiteBlock) {
+    return (
+      <iframe
+        title={block.title || 'Plantilla HTML'}
+        className="embedded-template-frame"
+        src={block.embedUrl}
+        srcDoc={block.embedUrl ? undefined : block.html}
+        onLoad={(event) => resizeFrame(event.currentTarget)}
+      />
+    );
+  }
+
   function renderBlock(block: SiteBlock) {
+    if (block.type === 'html' && (block.embedUrl || block.html)) {
+      return (
+        <article key={block.id} className={`b-html ${block.customClass || ''}`} style={parseCssText(block.customCss)}>
+          {renderEmbeddedTemplate(block)}
+        </article>
+      );
+    }
+
     return (
       <article key={block.id} className={`b-${block.type} ${block.customClass || ''}`} style={parseCssText(block.customCss)}>
         <h3>{block.title}</h3>
@@ -76,21 +116,33 @@ export default function SiteRenderer({ blocks, siteSlug = 'preview', theme, onLe
 
   return (
     <main
-      className="public-site"
+      className={`public-site ${hasEmbeddedTemplate ? 'public-site-embedded' : ''}`}
       style={theme ? { background: theme.background, color: theme.text, fontFamily: theme.font } : undefined}
     >
       {pages.length > 1 && <nav className="nav-inline">{pages.map((p) => <button key={p.id} type="button" onClick={() => setActivePage(p.id)}>{p.name}</button>)}</nav>}
-      {sections.map((section) => (
-        <section
-          key={section.id}
-          className={`b-section ${section.customClass || ''}`}
-          style={{ ...parseCssText(section.customCss), display: (section.pageId || 'home') === activePage ? 'block' : 'none' }}
-        >
-          <h2>{section.title}</h2>
-          <p>{section.content}</p>
-          {blocks.filter((b) => b.parentId === section.id).map(renderBlock)}
-        </section>
-      ))}
+      {sections.map((section) => {
+        const visible = (section.pageId || 'home') === activePage;
+        const sectionStyle = { ...parseCssText(section.customCss), display: visible ? 'block' : 'none' };
+        if (section.type === 'html' && (section.embedUrl || section.html)) {
+          return (
+            <section key={section.id} className={`b-section b-html-shell ${section.customClass || ''}`} style={sectionStyle}>
+              {renderEmbeddedTemplate(section)}
+            </section>
+          );
+        }
+
+        return (
+          <section
+            key={section.id}
+            className={`b-section ${section.customClass || ''}`}
+            style={sectionStyle}
+          >
+            <h2>{section.title}</h2>
+            <p>{section.content}</p>
+            {blocks.filter((b) => b.parentId === section.id).map(renderBlock)}
+          </section>
+        );
+      })}
       {looseBlocks.map(renderBlock)}
     </main>
   );

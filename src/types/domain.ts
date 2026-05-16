@@ -24,7 +24,7 @@ export type PlatformSettings = {
   updatedBy: string;
 };
 
-export type BlockType = 'section' | 'hero' | 'text' | 'image' | 'cta' | 'features' | 'navbar' | 'gallery' | 'faq' | 'contactForm';
+export type BlockType = 'section' | 'hero' | 'text' | 'image' | 'cta' | 'features' | 'navbar' | 'gallery' | 'faq' | 'contactForm' | 'html';
 export type NodeType = 'section' | 'element';
 
 export type SiteBlock = {
@@ -40,6 +40,8 @@ export type SiteBlock = {
   title: string;
   content: string;
   image?: string;
+  embedUrl?: string;
+  html?: string;
   buttonText?: string;
   buttonUrl?: string;
   items?: string[];

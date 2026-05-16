@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import Builder from '../components/Builder';
 import SiteRenderer from '../components/SiteRenderer';
@@ -30,7 +30,7 @@ const themePresets: SiteTheme[] = [
 
 export default function AppShell() {
   const user = currentUser();
-  const [refresh, setRefresh] = useState(0);
+  const [, setRefresh] = useState(0);
   const [history, setHistory] = useState<SiteProject[]>([]);
   const [future, setFuture] = useState<SiteProject[]>([]);
   const [templateName, setTemplateName] = useState('');
@@ -57,16 +57,13 @@ export default function AppShell() {
   const agents = getAgents();
   const selectedTemplate = templates.find((t) => t.id === previewTemplateId) || null;
 
-  const roleStats = useMemo(() => {
-    const users = getUsers();
-    return ['admin', 'agente', 'usuario'].map((role) => ({ role, value: users.filter((u) => u.role === role).length }));
-  }, [refresh]);
-
-  const leadsBySite = useMemo(() => {
+  const users = getUsers();
+  const roleStats = ['admin', 'agente', 'usuario'].map((role) => ({ role, value: users.filter((u) => u.role === role).length }));
+  const leadsBySite = (() => {
     const map = new Map<string, number>();
     for (const lead of leads) map.set(lead.siteSlug, (map.get(lead.siteSlug) || 0) + 1);
     return Array.from(map.entries()).map(([name, v]) => ({ name, v }));
-  }, [refresh]);
+  })();
 
   function ensureProject() {
     if (myProject) return myProject;
@@ -101,9 +98,11 @@ export default function AppShell() {
 
   function publishSite() {
     const command = project.publishTarget === 'staging' ? 'publish-site-staging' : 'publish-site-production';
-    enqueueCommand(command, { project, actor: actor.email });
-    upsertProject({ ...project, status: 'published', updatedAt: new Date().toISOString() });
+    const nextProject: SiteProject = { ...project, status: 'published', updatedAt: new Date().toISOString() };
+    upsertProject(nextProject);
+    enqueueCommand(command, { project: nextProject, actor: actor.email });
     setRefresh((v) => v + 1);
+    navigate(`/s/${nextProject.slug}`);
   }
 
   function saveSharedTemplate() {

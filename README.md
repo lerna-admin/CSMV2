@@ -13,10 +13,12 @@ CMS visual tipo Wix sin backend tradicional, orientado a publicar sitios en `git
 - Undo/Redo en el estudio.
 - Versionado con snapshots restaurables.
 - Guardado de plantillas por usuario y plantillas globales de admin.
+- Plantilla global LabSpa original cargada con assets locales aislados en iframe para conservar el diseno real.
 - Publicacion por entornos: `staging` y `production`.
 - Captura de leads en formularios y bandeja de datos.
 - Dashboard admin con graficas de roles, estado de proyectos y leads por sitio.
 - Sitios publicos accesibles por URL (`#/s/<slug>`), sin login.
+- Los sitios publicos leen `data/sites/<slug>.json` desplegado en GitHub Pages, no dependen solo de `localStorage`.
 - Toda creacion dispara issue y termina en archivos JSON del repo (fuente final).
 
 ## EPE2 (lenguaje operativo)

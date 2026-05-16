@@ -26,6 +26,7 @@ const elementPalette: PaletteItem[] = [
   { type: 'gallery', title: 'Galeria', content: 'Muestra tus trabajos', items: ['https://picsum.photos/500/300', 'https://picsum.photos/501/300'] },
   { type: 'faq', title: 'FAQ', content: 'Preguntas frecuentes', items: ['Que incluye?:Editor visual completo', 'Como publico?:Con GitHub Actions'] },
   { type: 'image', title: 'Imagen', content: 'Hero visual', image: 'https://picsum.photos/1200/700' },
+  { type: 'html', title: 'HTML embebido', content: 'Iframe o HTML completo', embedUrl: `${import.meta.env.BASE_URL}templates/labspa/index.html` },
   { type: 'contactForm', title: 'Formulario', content: 'Recibe leads desde tu landing' },
   { type: 'cta', title: 'Llamado a la accion', content: 'Convierte visitas en clientes', buttonText: 'Contactar', buttonUrl: '#' },
 ];
@@ -213,6 +214,7 @@ export default function Builder({ blocks, onChange, theme }: Props) {
 
           {sections.map((section, index) => {
             const items = childrenBySection.get(section.id) || [];
+            const isEmbeddedTemplate = section.type === 'html' && (section.embedUrl || section.html);
             return (
               <article
                 key={section.id}
@@ -231,57 +233,69 @@ export default function Builder({ blocks, onChange, theme }: Props) {
                     <button type="button" onClick={(event) => { event.stopPropagation(); removeBlock(section.id); }} title="Eliminar"><Trash2 size={15} /></button>
                   </div>
                 </div>
-                <h2
-                  contentEditable
-                  suppressContentEditableWarning
-                  onBlur={(event) => commit(updateBlock(normalized, section.id, { title: event.currentTarget.textContent || '' }))}
-                >
-                  {section.title}
-                </h2>
-                <p
-                  contentEditable
-                  suppressContentEditableWarning
-                  onBlur={(event) => commit(updateBlock(normalized, section.id, { content: event.currentTarget.textContent || '' }))}
-                >
-                  {section.content}
-                </p>
-
-                <div className="section-children">
-                  {items.length === 0 && <div className="drop-empty">Arrastra elementos aqui.</div>}
-                  {items.map((block) => (
-                    <article
-                      key={block.id}
-                      className={`block-card ${selectedId === block.id ? 'selected' : ''}`}
-                      onClick={(event) => { event.stopPropagation(); setSelectedId(block.id); }}
+                {isEmbeddedTemplate ? (
+                  <div className="embedded-template-editor">
+                    <iframe title={section.title} src={section.embedUrl} srcDoc={section.embedUrl ? undefined : section.html} />
+                    <p>{section.content}</p>
+                  </div>
+                ) : (
+                  <>
+                    <h2
+                      contentEditable
+                      suppressContentEditableWarning
+                      onBlur={(event) => commit(updateBlock(normalized, section.id, { title: event.currentTarget.textContent || '' }))}
                     >
-                      <header>
-                        <strong>{block.title}</strong>
-                        <div className="mini-actions">
-                          <button type="button" onClick={(event) => { event.stopPropagation(); moveBlock(block.id, -1); }} title="Subir"><ArrowUp size={15} /></button>
-                          <button type="button" onClick={(event) => { event.stopPropagation(); moveBlock(block.id, 1); }} title="Bajar"><ArrowDown size={15} /></button>
-                          <button type="button" onClick={(event) => { event.stopPropagation(); commit(cloneWithChildren(normalized, block)); }} title="Duplicar"><Copy size={15} /></button>
-                          <button type="button" onClick={(event) => { event.stopPropagation(); removeBlock(block.id); }} title="Eliminar"><Trash2 size={15} /></button>
-                        </div>
-                      </header>
-                      <h3
-                        contentEditable
-                        suppressContentEditableWarning
-                        onBlur={(event) => commit(updateBlock(normalized, block.id, { title: event.currentTarget.textContent || '' }))}
-                      >
-                        {block.title}
-                      </h3>
-                      <p
-                        contentEditable
-                        suppressContentEditableWarning
-                        onBlur={(event) => commit(updateBlock(normalized, block.id, { content: event.currentTarget.textContent || '' }))}
-                      >
-                        {block.content}
-                      </p>
-                      {block.buttonText && <span className="fake-button">{block.buttonText}</span>}
-                      {block.type === 'gallery' && <div className="mini-gallery">{(block.items || []).slice(0, 3).map((img) => <img key={img} src={img} alt="" />)}</div>}
-                    </article>
-                  ))}
-                </div>
+                      {section.title}
+                    </h2>
+                    <p
+                      contentEditable
+                      suppressContentEditableWarning
+                      onBlur={(event) => commit(updateBlock(normalized, section.id, { content: event.currentTarget.textContent || '' }))}
+                    >
+                      {section.content}
+                    </p>
+
+                    <div className="section-children">
+                      {items.length === 0 && <div className="drop-empty">Arrastra elementos aqui.</div>}
+                      {items.map((block) => (
+                        <article
+                          key={block.id}
+                          className={`block-card ${selectedId === block.id ? 'selected' : ''}`}
+                          onClick={(event) => { event.stopPropagation(); setSelectedId(block.id); }}
+                        >
+                          <header>
+                            <strong>{block.title}</strong>
+                            <div className="mini-actions">
+                              <button type="button" onClick={(event) => { event.stopPropagation(); moveBlock(block.id, -1); }} title="Subir"><ArrowUp size={15} /></button>
+                              <button type="button" onClick={(event) => { event.stopPropagation(); moveBlock(block.id, 1); }} title="Bajar"><ArrowDown size={15} /></button>
+                              <button type="button" onClick={(event) => { event.stopPropagation(); commit(cloneWithChildren(normalized, block)); }} title="Duplicar"><Copy size={15} /></button>
+                              <button type="button" onClick={(event) => { event.stopPropagation(); removeBlock(block.id); }} title="Eliminar"><Trash2 size={15} /></button>
+                            </div>
+                          </header>
+                          <h3
+                            contentEditable
+                            suppressContentEditableWarning
+                            onBlur={(event) => commit(updateBlock(normalized, block.id, { title: event.currentTarget.textContent || '' }))}
+                          >
+                            {block.title}
+                          </h3>
+                          <p
+                            contentEditable
+                            suppressContentEditableWarning
+                            onBlur={(event) => commit(updateBlock(normalized, block.id, { content: event.currentTarget.textContent || '' }))}
+                          >
+                            {block.content}
+                          </p>
+                          {block.type === 'html' && (block.embedUrl || block.html) && (
+                            <iframe className="block-embed-preview" title={block.title} src={block.embedUrl} srcDoc={block.embedUrl ? undefined : block.html} />
+                          )}
+                          {block.buttonText && <span className="fake-button">{block.buttonText}</span>}
+                          {block.type === 'gallery' && <div className="mini-gallery">{(block.items || []).slice(0, 3).map((img) => <img key={img} src={img} alt="" />)}</div>}
+                        </article>
+                      ))}
+                    </div>
+                  </>
+                )}
               </article>
             );
           })}
@@ -309,6 +323,12 @@ export default function Builder({ blocks, onChange, theme }: Props) {
               <label>Items<textarea value={(selected.items || []).join('\n')} onChange={(e) => commit(updateBlock(normalized, selected.id, { items: e.target.value.split('\n').filter(Boolean) }))} /></label>
             )}
             {selected.type === 'image' && <label>Imagen<input value={selected.image || ''} onChange={(e) => commit(updateBlock(normalized, selected.id, { image: e.target.value }))} /></label>}
+            {selected.type === 'html' && (
+              <>
+                <label>URL iframe<input value={selected.embedUrl || ''} onChange={(e) => commit(updateBlock(normalized, selected.id, { embedUrl: e.target.value }))} /></label>
+                <label>HTML completo<textarea value={selected.html || ''} onChange={(e) => commit(updateBlock(normalized, selected.id, { html: e.target.value }))} /></label>
+              </>
+            )}
             <div className="style-presets">
               {stylePresets.map((preset) => (
                 <button key={preset.name} type="button" onClick={() => commit(updateBlock(normalized, selected.id, { customCss: preset.css }))}>{preset.name}</button>
