@@ -95,6 +95,10 @@ export default function AppShell() {
     return `${window.location.origin}${import.meta.env.BASE_URL}#/s/${slug}`;
   }
 
+  function editUrl(projectId: string) {
+    return `${window.location.origin}${import.meta.env.BASE_URL}#/app/site?project=${projectId}`;
+  }
+
   function siteAssetUrl(slug: string, fileName: string) {
     return `${window.location.origin}${import.meta.env.BASE_URL}data/sites/${slug}/assets/${fileName}`;
   }
@@ -170,6 +174,7 @@ export default function AppShell() {
     setHistory([]);
     setFuture([]);
     setShowCreateWizard(false);
+    navigate(`/app/site?project=${id}`);
   }
 
   function resetSiteWizard() {
@@ -216,6 +221,7 @@ export default function AppShell() {
         title,
         description,
         status: 'draft',
+        publishedAt: undefined,
         updatedAt: new Date().toISOString(),
         blocks,
         seo: {
@@ -239,7 +245,8 @@ export default function AppShell() {
     }
   }
 
-  const storedProjectId = activeProjectId || localStorage.getItem(`csmv2_active_project_${actor.email}`) || '';
+  const searchProjectId = new URLSearchParams(routeLocation.search).get('project') || '';
+  const storedProjectId = activeProjectId || searchProjectId || localStorage.getItem(`csmv2_active_project_${actor.email}`) || '';
   const project = myProjects.find((p) => p.id === storedProjectId) || myProjects[0] || null;
   const projectTheme = project?.theme || baseTheme;
   const shouldShowWizard = showCreateWizard || myProjects.length === 0;
@@ -248,14 +255,17 @@ export default function AppShell() {
     if (!project) return;
     setHistory((h) => [...h, project]);
     setFuture([]);
-    upsertProject(next);
+    const nextProject = project.status === 'published'
+      ? { ...next, status: 'draft' as const, publishedAt: project.publishedAt }
+      : next;
+    upsertProject(nextProject);
     setRefresh((v) => v + 1);
   }
 
   function publishSite() {
     if (!project) return;
     const command = project.publishTarget === 'staging' ? 'publish-site-staging' : 'publish-site-production';
-    const nextProject: SiteProject = { ...project, status: 'published', updatedAt: new Date().toISOString() };
+    const nextProject: SiteProject = { ...project, status: 'published', publishedAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
     upsertProject(nextProject);
     enqueueCommand(command, { project: nextProject, actor: actor.email });
     setRefresh((v) => v + 1);
@@ -276,6 +286,8 @@ export default function AppShell() {
         id: project.id,
         ownerEmail: project.ownerEmail,
         versions: project.versions,
+        publishedAt: project.publishedAt || published.publishedAt,
+        status: 'published',
         updatedAt: new Date().toISOString(),
       });
     } finally {
@@ -375,12 +387,13 @@ export default function AppShell() {
                       <article key={site.id} className={`site-card ${project?.id === site.id ? 'active' : ''}`}>
                         <div>
                           <strong>{site.title}</strong>
-                          <span>{site.status === 'published' ? 'Publicado' : 'Borrador'} · /{site.slug}</span>
+                          <span>{site.status === 'published' ? 'Publicado y al dia' : site.publishedAt ? 'Borrador con version publicada' : 'Borrador sin publicar'} · /{site.slug}</span>
                         </div>
-                        <input value={publicUrl(site.slug)} readOnly onFocus={(event) => event.currentTarget.select()} />
+                        <input value={editUrl(site.id)} readOnly onFocus={(event) => event.currentTarget.select()} />
+                        <input value={site.publishedAt ? publicUrl(site.slug) : 'Sin URL publicada aun'} readOnly onFocus={(event) => event.currentTarget.select()} />
                         <div className="site-card-actions">
-                          <button type="button" onClick={() => selectProject(site.id)}>Editar</button>
-                          <button type="button" onClick={() => window.open(publicUrl(site.slug), '_blank', 'noopener,noreferrer')}>Ver URL</button>
+                          <button type="button" onClick={() => selectProject(site.id)}>Abrir editor</button>
+                          <button type="button" disabled={!site.publishedAt} onClick={() => window.open(publicUrl(site.slug), '_blank', 'noopener,noreferrer')}>Ver publicada</button>
                         </div>
                       </article>
                     ))}
@@ -469,10 +482,11 @@ export default function AppShell() {
                 <>
                   <section className="seo-panel">
                     <h3>Sitio: {project.title}</h3>
-                    <p>Estado: {project.status === 'published' ? 'publicado' : 'borrador'} · URL publica: {publicUrl(project.slug)}</p>
+                    <p>Estado de edicion: {project.status === 'published' ? 'publicado y sincronizado' : 'borrador de edicion'} · URL editor: {editUrl(project.id)}</p>
+                    <p>Estado publico: {project.publishedAt ? `publicado por ultima vez ${new Date(project.publishedAt).toLocaleString()}` : 'sin publicacion aun'} · URL publica: {project.publishedAt ? publicUrl(project.slug) : 'todavia no disponible'}</p>
                     <div className="actions">
                       <button type="button" onClick={publishSite}>Publicar sitio</button>
-                      <button type="button" disabled={revertingToPublished} onClick={() => { void revertToPublishedSite(); }}>
+                      <button type="button" disabled={revertingToPublished || !project.publishedAt} onClick={() => { void revertToPublishedSite(); }}>
                         {revertingToPublished ? 'Restaurando...' : 'Volver a publicado'}
                       </button>
                       <button type="button" disabled={!history.length} onClick={() => {

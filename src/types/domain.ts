@@ -104,6 +104,7 @@ export type SiteProject = {
   title: string;
   description: string;
   status: 'draft' | 'published';
+  publishedAt?: string;
   templateId?: string;
   updatedAt: string;
   blocks: SiteBlock[];
