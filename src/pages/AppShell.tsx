@@ -6,11 +6,10 @@ import { currentUser } from '../lib/auth';
 import { encryptEpe2, decryptEpe2 } from '../lib/epe2';
 import { cloneBlocksWithNewIds, materializeTemplateBlocks } from '../lib/htmlTemplates';
 import { clearSession, enqueueCommand, getAgents, getLeads, getProjects, getSettings, getTemplates, getUsers, saveSettings, upsertAgent, upsertProject, upsertTemplate } from '../lib/storage';
-import type { SeoConfig, SiteBlock, SiteProject, SiteTemplate, SiteTheme } from '../types/domain';
+import type { SiteBlock, SiteProject, SiteTemplate, SiteTheme } from '../types/domain';
 import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
 const COLORS = ['#1e40af', '#16a34a', '#ea580c'];
-const baseSeo: SeoConfig = { title: 'CSMV2 Site', description: 'Sitio creado con CSMV2', keywords: ['csmv2'] };
 const baseTheme: SiteTheme = {
   name: 'Studio Clean',
   primary: '#006edc',
@@ -38,8 +37,22 @@ export default function AppShell() {
   const [templateBlocks, setTemplateBlocks] = useState<SiteBlock[]>([]);
   const [editingTemplateId, setEditingTemplateId] = useState('');
   const [previewTemplateId, setPreviewTemplateId] = useState<string>('');
-  const [newSiteTitle, setNewSiteTitle] = useState('');
-  const [newSiteSlug, setNewSiteSlug] = useState('');
+  const [activeProjectId, setActiveProjectId] = useState('');
+  const [showCreateWizard, setShowCreateWizard] = useState(false);
+  const [siteWizardStep, setSiteWizardStep] = useState(1);
+  const [siteCreating, setSiteCreating] = useState(false);
+  const [siteSlugTouched, setSiteSlugTouched] = useState(false);
+  const [siteDraft, setSiteDraft] = useState({
+    title: '',
+    slug: '',
+    description: '',
+    seoTitle: '',
+    seoDescription: '',
+    keywords: '',
+    ogImage: '',
+    templateId: '',
+    publishTarget: 'production' as 'staging' | 'production',
+  });
   const [templateLoadingId, setTemplateLoadingId] = useState('');
   const [automationToken, setAutomationToken] = useState(() => '');
   const routeLocation = useLocation();
@@ -55,9 +68,11 @@ export default function AppShell() {
   const actor = user;
 
   const allProjects = getProjects();
-  const myProject = allProjects.find((p) => p.ownerEmail === actor.email) || null;
-  const templates = getTemplates().filter((t) => t.publicTemplate || t.ownerEmail === actor.email);
-  const myTemplates = templates.filter((t) => t.ownerEmail === actor.email);
+  const myProjects = allProjects
+    .filter((p) => p.ownerEmail === actor.email)
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  const templates = getTemplates().filter((t) => t.publicTemplate || (actor.role === 'admin' && t.ownerEmail === actor.email));
+  const myTemplates = actor.role === 'admin' ? templates.filter((t) => t.ownerEmail === actor.email) : [];
   const leads = getLeads();
   const settings = getSettings();
   const agents = getAgents();
@@ -75,39 +90,93 @@ export default function AppShell() {
     return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || actor.email.split('@')[0].toLowerCase().replace(/[^a-z0-9-]/g, '-');
   }
 
-  function createSite() {
-    const title = newSiteTitle.trim() || `${actor.name} Site`;
-    const baseSlug = slugify(newSiteSlug || title);
-    const usedSlugs = new Set(allProjects.filter((p) => p.ownerEmail !== actor.email).map((p) => p.slug));
-    let slug = baseSlug;
-    let suffix = 2;
-    while (usedSlugs.has(slug)) {
-      slug = `${baseSlug}-${suffix}`;
-      suffix += 1;
-    }
-    const next: SiteProject = {
-      id: crypto.randomUUID(),
-      ownerEmail: actor.email,
-      slug,
-      title,
-      description: 'Sitio creado con CSMV2',
-      status: 'draft',
-      updatedAt: new Date().toISOString(),
-      blocks: [],
-      seo: baseSeo,
-      theme: baseTheme,
-      versions: [],
-      publishTarget: 'production',
-    };
-    upsertProject(next);
-    enqueueCommand('create-project', { project: next, actor: actor.email });
-    setNewSiteTitle('');
-    setNewSiteSlug('');
-    setRefresh((v) => v + 1);
+  function publicUrl(slug: string) {
+    return `${window.location.origin}${import.meta.env.BASE_URL}#/s/${slug}`;
   }
 
-  const project = myProject;
+  function updateSiteDraft(patch: Partial<typeof siteDraft>) {
+    setSiteDraft((current) => ({ ...current, ...patch }));
+  }
+
+  function selectProject(id: string) {
+    setActiveProjectId(id);
+    localStorage.setItem(`csmv2_active_project_${actor.email}`, id);
+    setHistory([]);
+    setFuture([]);
+    setShowCreateWizard(false);
+  }
+
+  function resetSiteWizard() {
+    setSiteSlugTouched(false);
+    setSiteDraft({
+      title: '',
+      slug: '',
+      description: '',
+      seoTitle: '',
+      seoDescription: '',
+      keywords: '',
+      ogImage: '',
+      templateId: '',
+      publishTarget: 'production',
+    });
+    setSiteWizardStep(1);
+  }
+
+  async function createSite() {
+    if (!siteDraft.title.trim()) return;
+    setSiteCreating(true);
+    try {
+      const title = siteDraft.title.trim();
+      const description = siteDraft.description.trim() || 'Sitio creado con CSMV2';
+      const baseSlug = slugify(siteDraft.slug || title);
+      const usedSlugs = new Set(allProjects.map((p) => p.slug));
+      let slug = baseSlug;
+      let suffix = 2;
+      while (usedSlugs.has(slug)) {
+        slug = `${baseSlug}-${suffix}`;
+        suffix += 1;
+      }
+      const selectedWizardTemplate = templates.find((template) => template.id === siteDraft.templateId) || null;
+      const blocks = selectedWizardTemplate
+        ? selectedWizardTemplate.blocks.some((block) => block.type === 'html')
+          ? await materializeTemplateBlocks(selectedWizardTemplate.blocks)
+          : cloneBlocksWithNewIds(selectedWizardTemplate.blocks)
+        : [];
+      const keywords = siteDraft.keywords.split(',').map((keyword) => keyword.trim()).filter(Boolean);
+      const next: SiteProject = {
+        id: crypto.randomUUID(),
+        ownerEmail: actor.email,
+        slug,
+        title,
+        description,
+        status: 'draft',
+        updatedAt: new Date().toISOString(),
+        blocks,
+        seo: {
+          title: siteDraft.seoTitle.trim() || title,
+          description: siteDraft.seoDescription.trim() || description,
+          keywords: keywords.length ? keywords : [slug],
+          ogImage: siteDraft.ogImage.trim() || undefined,
+        },
+        theme: selectedWizardTemplate?.theme || baseTheme,
+        templateId: selectedWizardTemplate?.id,
+        versions: [],
+        publishTarget: siteDraft.publishTarget,
+      };
+      upsertProject(next);
+      enqueueCommand('create-project', { project: next, actor: actor.email });
+      selectProject(next.id);
+      resetSiteWizard();
+      setRefresh((v) => v + 1);
+    } finally {
+      setSiteCreating(false);
+    }
+  }
+
+  const storedProjectId = activeProjectId || localStorage.getItem(`csmv2_active_project_${actor.email}`) || '';
+  const project = myProjects.find((p) => p.id === storedProjectId) || myProjects[0] || null;
   const projectTheme = project?.theme || baseTheme;
+  const shouldShowWizard = showCreateWizard || myProjects.length === 0;
 
   function persist(next: SiteProject) {
     if (!project) return;
@@ -142,6 +211,7 @@ export default function AppShell() {
   }
 
   async function startTemplateFromBase(template: SiteTemplate) {
+    if (actor.role !== 'admin') return;
     setTemplateLoadingId(template.id);
     try {
       const blocks = template.blocks.some((block) => block.type === 'html')
@@ -158,6 +228,7 @@ export default function AppShell() {
   }
 
   function saveSharedTemplate() {
+    if (actor.role !== 'admin') return;
     if (!templateName.trim()) return;
     const template = {
       id: editingTemplateId || crypto.randomUUID(),
@@ -193,102 +264,200 @@ export default function AppShell() {
       <section className="workspace">
         <aside className="studio-nav wpwix-nav">
           <h3>Panel</h3>
-          <button type="button" className={routeLocation.pathname === '/app/site' ? 'active' : ''} onClick={() => navigate('/app/site')}>Sitio</button>
-          <button type="button" className={routeLocation.pathname === '/app/templates' ? 'active' : ''} onClick={() => navigate('/app/templates')}>Crear plantilla</button>
-          <button type="button" className={routeLocation.pathname === '/app/admin' ? 'active' : ''} onClick={() => navigate('/app/admin')}>Administracion</button>
+          <button type="button" className={`nav-site ${routeLocation.pathname === '/app/site' ? 'active' : ''}`} onClick={() => navigate('/app/site')}>Sitio</button>
+          {actor.role === 'admin' && <button type="button" className={`nav-template ${routeLocation.pathname === '/app/templates' ? 'active' : ''}`} onClick={() => navigate('/app/templates')}>Crear plantilla</button>}
+          <button type="button" className={`nav-admin ${routeLocation.pathname === '/app/admin' ? 'active' : ''}`} onClick={() => navigate('/app/admin')}>Administracion</button>
         </aside>
 
         <div className="studio-content wpwix-content">
-          {routeLocation.pathname === '/app/site' && (!project ? (
-            <section className="create-site-panel">
-              <div>
-                <p className="eyebrow">Nuevo sitio</p>
-                <h2>Crea una ruta publica antes de editar</h2>
-                <p>El sitio empieza como borrador. Al publicar, quedara disponible en una ruta publica propia como #/s/mi-landing y se encolara el pipeline para guardar el JSON en el repositorio.</p>
-              </div>
-              <div className="create-site-form">
-                <label>Nombre del sitio<input value={newSiteTitle} onChange={(event) => {
-                  setNewSiteTitle(event.target.value);
-                  if (!newSiteSlug) setNewSiteSlug(slugify(event.target.value));
-                }} placeholder="Mi landing principal" /></label>
-                <label>Ruta publica<input value={newSiteSlug} onChange={(event) => setNewSiteSlug(slugify(event.target.value))} placeholder="mi-landing" /></label>
-                <button type="button" onClick={createSite}>Crear sitio</button>
-              </div>
-            </section>
-          ) : (
+          {routeLocation.pathname === '/app/site' && (
             <>
-              <section className="seo-panel">
-                <h3>Sitio: {project.title}</h3>
-                <p>Estado: {project.status === 'published' ? 'publicado' : 'borrador'} · URL publica: https://lerna-admin.github.io/CSMV2/#/s/{project.slug}</p>
-                <div className="actions">
-                  <button type="button" onClick={publishSite}>Publicar sitio</button>
-                  <button type="button" disabled={!history.length} onClick={() => {
-                    const prev = history[history.length - 1];
-                    setHistory((h) => h.slice(0, -1));
-                    setFuture((f) => [project, ...f]);
-                    upsertProject(prev);
-                    setRefresh((v) => v + 1);
-                  }}>Undo</button>
-                  <button type="button" disabled={!future.length} onClick={() => {
-                    const [next, ...rest] = future;
-                    if (!next) return;
-                    setFuture(rest);
-                    setHistory((h) => [...h, project]);
-                    upsertProject(next);
-                    setRefresh((v) => v + 1);
-                  }}>Redo</button>
+              <section className="site-library">
+                <div className="site-library-head">
+                  <div>
+                    <h3>Mis sitios</h3>
+                    <p>Administra tus borradores, URLs publicas y sitios publicados.</p>
+                  </div>
+                  <button type="button" onClick={() => { resetSiteWizard(); setShowCreateWizard(true); }}>Crear nuevo sitio</button>
                 </div>
-                <div className="seo-grid">
-                  <input value={project.seo.title} onChange={(e) => persist({ ...project, seo: { ...project.seo, title: e.target.value }, updatedAt: new Date().toISOString() })} placeholder="SEO title" />
-                  <input value={project.seo.description} onChange={(e) => persist({ ...project, seo: { ...project.seo, description: e.target.value }, updatedAt: new Date().toISOString() })} placeholder="SEO description" />
-                  <input value={project.seo.keywords.join(',')} onChange={(e) => persist({ ...project, seo: { ...project.seo, keywords: e.target.value.split(',').map((k) => k.trim()).filter(Boolean) }, updatedAt: new Date().toISOString() })} placeholder="keywords" />
-                  <select value={project.publishTarget} onChange={(e) => persist({ ...project, publishTarget: e.target.value as 'staging' | 'production' })}>
-                    <option value="staging">staging</option>
-                    <option value="production">production</option>
-                  </select>
-                </div>
+                {myProjects.length === 0 ? (
+                  <div className="empty-inspector">Todavia no tienes sitios. Completa el wizard para crear el primero.</div>
+                ) : (
+                  <div className="site-card-list">
+                    {myProjects.map((site) => (
+                      <article key={site.id} className={`site-card ${project?.id === site.id ? 'active' : ''}`}>
+                        <div>
+                          <strong>{site.title}</strong>
+                          <span>{site.status === 'published' ? 'Publicado' : 'Borrador'} · /{site.slug}</span>
+                        </div>
+                        <input value={publicUrl(site.slug)} readOnly onFocus={(event) => event.currentTarget.select()} />
+                        <div className="site-card-actions">
+                          <button type="button" onClick={() => selectProject(site.id)}>Editar</button>
+                          <button type="button" onClick={() => window.open(publicUrl(site.slug), '_blank', 'noopener,noreferrer')}>Ver URL</button>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                )}
               </section>
 
-              <section className="theme-panel">
-                <div>
-                  <h3>Tema global</h3>
-                  <p>{projectTheme.name}</p>
-                </div>
-                <div className="theme-presets">
-                  {themePresets.map((theme) => (
-                    <button key={theme.name} type="button" onClick={() => persist({ ...project, theme, updatedAt: new Date().toISOString() })}>
-                      <span style={{ background: theme.primary }} />
-                      <span style={{ background: theme.accent }} />
-                      {theme.name}
-                    </button>
-                  ))}
-                </div>
-                <div className="theme-grid">
-                  <label>Primario<input type="color" value={projectTheme.primary} onChange={(e) => persist({ ...project, theme: { ...projectTheme, primary: e.target.value }, updatedAt: new Date().toISOString() })} /></label>
-                  <label>Acento<input type="color" value={projectTheme.accent} onChange={(e) => persist({ ...project, theme: { ...projectTheme, accent: e.target.value }, updatedAt: new Date().toISOString() })} /></label>
-                  <label>Fondo<input type="color" value={projectTheme.background} onChange={(e) => persist({ ...project, theme: { ...projectTheme, background: e.target.value }, updatedAt: new Date().toISOString() })} /></label>
-                  <label>Texto<input type="color" value={projectTheme.text} onChange={(e) => persist({ ...project, theme: { ...projectTheme, text: e.target.value }, updatedAt: new Date().toISOString() })} /></label>
-                </div>
-              </section>
-
-              <Builder blocks={project.blocks} theme={projectTheme} onChange={(blocks) => persist({ ...project, blocks, updatedAt: new Date().toISOString() })} />
-
-              <section className="templates">
-                <h3>Plantillas disponibles (compartidas)</h3>
-                <div className="template-list">
-                  {templates.map((tpl) => (
-                    <div key={tpl.id} className="template-card">
-                      <strong>{tpl.name}</strong>
-                      <button type="button" disabled={templateLoadingId === tpl.id} onClick={() => { void applyTemplate(tpl); }}>{templateLoadingId === tpl.id ? 'Preparando...' : 'Usar y editar'}</button>
-                      <button type="button" onClick={() => setPreviewTemplateId(tpl.id)}>Visualizar</button>
+              {shouldShowWizard ? (
+                <section className="site-wizard">
+                  <div className="wizard-copy">
+                    <p className="eyebrow">Wizard de sitio</p>
+                    <h2>Define nombre, SEO y plantilla antes de editar</h2>
+                    <p>Estos datos se guardan con el sitio y ayudan a publicar una URL clara, con metadata util para buscadores y redes sociales.</p>
+                  </div>
+                  <div className="wizard-panel">
+                    <div className="wizard-steps">
+                      <button type="button" className={siteWizardStep === 1 ? 'active' : ''} onClick={() => setSiteWizardStep(1)}>1. Identidad</button>
+                      <button type="button" className={siteWizardStep === 2 ? 'active' : ''} onClick={() => setSiteWizardStep(2)} disabled={!siteDraft.title.trim()}>2. SEO</button>
+                      <button type="button" className={siteWizardStep === 3 ? 'active' : ''} onClick={() => setSiteWizardStep(3)} disabled={!siteDraft.title.trim()}>3. Plantilla</button>
                     </div>
-                  ))}
-                </div>
-              </section>
-            </>
-          ))}
 
-          {routeLocation.pathname === '/app/templates' && (
+                    {siteWizardStep === 1 && (
+                      <div className="wizard-fields">
+                        <label>Nombre del sitio<input value={siteDraft.title} onChange={(event) => {
+                          const title = event.target.value;
+                          updateSiteDraft({
+                            title,
+                            slug: siteSlugTouched ? siteDraft.slug : slugify(title),
+                            seoTitle: siteDraft.seoTitle ? siteDraft.seoTitle : title,
+                          });
+                        }} placeholder="Landing de mi spa" /></label>
+                        <label>Ruta publica<input value={siteDraft.slug} onChange={(event) => {
+                          setSiteSlugTouched(true);
+                          updateSiteDraft({ slug: slugify(event.target.value) });
+                        }} placeholder="landing-spa" /></label>
+                        <label>Descripcion corta<textarea value={siteDraft.description} onChange={(event) => {
+                          const description = event.target.value;
+                          updateSiteDraft({
+                            description,
+                            seoDescription: siteDraft.seoDescription ? siteDraft.seoDescription : description,
+                          });
+                        }} placeholder="Que ofrece este sitio y para quien existe." /></label>
+                      </div>
+                    )}
+
+                    {siteWizardStep === 2 && (
+                      <div className="wizard-fields">
+                        <label>SEO title<input value={siteDraft.seoTitle} onChange={(event) => updateSiteDraft({ seoTitle: event.target.value })} placeholder="Titulo para Google" /></label>
+                        <label>SEO description<textarea value={siteDraft.seoDescription} onChange={(event) => updateSiteDraft({ seoDescription: event.target.value })} placeholder="Descripcion que aparecera en buscadores." /></label>
+                        <label>Keywords<input value={siteDraft.keywords} onChange={(event) => updateSiteDraft({ keywords: event.target.value })} placeholder="spa, masajes, bienestar" /></label>
+                        <label>Imagen social / OG<input value={siteDraft.ogImage} onChange={(event) => updateSiteDraft({ ogImage: event.target.value })} placeholder="https://..." /></label>
+                        <label>Destino de publicacion<select value={siteDraft.publishTarget} onChange={(event) => updateSiteDraft({ publishTarget: event.target.value as 'staging' | 'production' })}>
+                          <option value="production">production</option>
+                          <option value="staging">staging</option>
+                        </select></label>
+                      </div>
+                    )}
+
+                    {siteWizardStep === 3 && (
+                      <div className="wizard-fields">
+                        <p>Selecciona una plantilla inicial. Luego podras editar textos, estilos, funciones y secciones desde el canvas.</p>
+                        <div className="template-list">
+                          {templates.map((tpl) => (
+                            <div key={tpl.id} className={`template-card ${siteDraft.templateId === tpl.id ? 'active' : ''}`}>
+                              <strong>{tpl.name}</strong>
+                              <button type="button" onClick={() => updateSiteDraft({ templateId: tpl.id })}>{siteDraft.templateId === tpl.id ? 'Seleccionada' : 'Seleccionar'}</button>
+                              <button type="button" onClick={() => setPreviewTemplateId(tpl.id)}>Visualizar</button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="wizard-actions">
+                      {myProjects.length > 0 && <button type="button" onClick={() => setShowCreateWizard(false)}>Cancelar</button>}
+                      <button type="button" disabled={siteWizardStep === 1} onClick={() => setSiteWizardStep((step) => Math.max(1, step - 1))}>Anterior</button>
+                      {siteWizardStep < 3 ? (
+                        <button type="button" disabled={!siteDraft.title.trim()} onClick={() => setSiteWizardStep((step) => Math.min(3, step + 1))}>Siguiente</button>
+                      ) : (
+                        <button type="button" disabled={!siteDraft.title.trim() || siteCreating} onClick={() => { void createSite(); }}>{siteCreating ? 'Creando...' : 'Crear sitio'}</button>
+                      )}
+                    </div>
+                  </div>
+                </section>
+              ) : project ? (
+                <>
+                  <section className="seo-panel">
+                    <h3>Sitio: {project.title}</h3>
+                    <p>Estado: {project.status === 'published' ? 'publicado' : 'borrador'} · URL publica: {publicUrl(project.slug)}</p>
+                    <div className="actions">
+                      <button type="button" onClick={publishSite}>Publicar sitio</button>
+                      <button type="button" disabled={!history.length} onClick={() => {
+                        const prev = history[history.length - 1];
+                        setHistory((h) => h.slice(0, -1));
+                        setFuture((f) => [project, ...f]);
+                        upsertProject(prev);
+                        setRefresh((v) => v + 1);
+                      }}>Undo</button>
+                      <button type="button" disabled={!future.length} onClick={() => {
+                        const [next, ...rest] = future;
+                        if (!next) return;
+                        setFuture(rest);
+                        setHistory((h) => [...h, project]);
+                        upsertProject(next);
+                        setRefresh((v) => v + 1);
+                      }}>Redo</button>
+                    </div>
+                    <div className="seo-grid seo-grid-wide">
+                      <label>Nombre<input value={project.title} onChange={(e) => persist({ ...project, title: e.target.value, updatedAt: new Date().toISOString() })} /></label>
+                      <label>Descripcion sitio<input value={project.description} onChange={(e) => persist({ ...project, description: e.target.value, updatedAt: new Date().toISOString() })} /></label>
+                      <label>SEO title<input value={project.seo.title} onChange={(e) => persist({ ...project, seo: { ...project.seo, title: e.target.value }, updatedAt: new Date().toISOString() })} /></label>
+                      <label>SEO description<input value={project.seo.description} onChange={(e) => persist({ ...project, seo: { ...project.seo, description: e.target.value }, updatedAt: new Date().toISOString() })} /></label>
+                      <label>Keywords<input value={project.seo.keywords.join(',')} onChange={(e) => persist({ ...project, seo: { ...project.seo, keywords: e.target.value.split(',').map((k) => k.trim()).filter(Boolean) }, updatedAt: new Date().toISOString() })} /></label>
+                      <label>OG image<input value={project.seo.ogImage || ''} onChange={(e) => persist({ ...project, seo: { ...project.seo, ogImage: e.target.value }, updatedAt: new Date().toISOString() })} /></label>
+                      <label>Publicacion<select value={project.publishTarget} onChange={(e) => persist({ ...project, publishTarget: e.target.value as 'staging' | 'production' })}>
+                        <option value="staging">staging</option>
+                        <option value="production">production</option>
+                      </select></label>
+                    </div>
+                  </section>
+
+                  <section className="theme-panel">
+                    <div>
+                      <h3>Tema global</h3>
+                      <p>{projectTheme.name}</p>
+                    </div>
+                    <div className="theme-presets">
+                      {themePresets.map((theme) => (
+                        <button key={theme.name} type="button" onClick={() => persist({ ...project, theme, updatedAt: new Date().toISOString() })}>
+                          <span style={{ background: theme.primary }} />
+                          <span style={{ background: theme.accent }} />
+                          {theme.name}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="theme-grid">
+                      <label>Primario<input type="color" value={projectTheme.primary} onChange={(e) => persist({ ...project, theme: { ...projectTheme, primary: e.target.value }, updatedAt: new Date().toISOString() })} /></label>
+                      <label>Acento<input type="color" value={projectTheme.accent} onChange={(e) => persist({ ...project, theme: { ...projectTheme, accent: e.target.value }, updatedAt: new Date().toISOString() })} /></label>
+                      <label>Fondo<input type="color" value={projectTheme.background} onChange={(e) => persist({ ...project, theme: { ...projectTheme, background: e.target.value }, updatedAt: new Date().toISOString() })} /></label>
+                      <label>Texto<input type="color" value={projectTheme.text} onChange={(e) => persist({ ...project, theme: { ...projectTheme, text: e.target.value }, updatedAt: new Date().toISOString() })} /></label>
+                    </div>
+                  </section>
+
+                  <Builder blocks={project.blocks} theme={projectTheme} onChange={(blocks) => persist({ ...project, blocks, updatedAt: new Date().toISOString() })} />
+
+                  <section className="templates">
+                    <h3>Plantillas disponibles</h3>
+                    <p>Los usuarios pueden seleccionar plantillas existentes para aplicarlas a su sitio. Crear plantillas nuevas queda reservado al administrador.</p>
+                    <div className="template-list">
+                      {templates.map((tpl) => (
+                        <div key={tpl.id} className="template-card">
+                          <strong>{tpl.name}</strong>
+                          <button type="button" disabled={templateLoadingId === tpl.id} onClick={() => { void applyTemplate(tpl); }}>{templateLoadingId === tpl.id ? 'Preparando...' : 'Aplicar al sitio'}</button>
+                          <button type="button" onClick={() => setPreviewTemplateId(tpl.id)}>Visualizar</button>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                </>
+              ) : null}
+            </>
+          )}
+
+          {routeLocation.pathname === '/app/templates' && (actor.role === 'admin' ? (
             <section className="template-studio">
               <h3>Crear plantilla</h3>
               <p>Vista independiente para construir plantillas sin ruido de administración.</p>
@@ -331,7 +500,13 @@ export default function AppShell() {
                 </div>
               </div>
             </section>
-          )}
+          ) : (
+            <section className="template-studio">
+              <h3>Acceso restringido</h3>
+              <p>Solo el administrador puede crear o editar plantillas. Los usuarios pueden seleccionar plantillas existentes desde la seccion Sitio.</p>
+              <button type="button" onClick={() => navigate('/app/site')}>Volver a sitios</button>
+            </section>
+          ))}
 
           {routeLocation.pathname === '/app/admin' && (
             actor.role === 'admin' ? (

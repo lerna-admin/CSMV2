@@ -6,14 +6,14 @@ CMS visual tipo Wix sin backend tradicional, orientado a publicar sitios en `git
 
 - Autenticacion local y roles: `admin`, `agente`, `usuario`.
 - Registro directo para usuarios (`usuario`) sin espera de pipeline.
-- Un solo proyecto por usuario.
-- Creacion explicita de sitio con slug publico propio antes de editar o publicar.
+- Multiples sitios por usuario con biblioteca de sitios, URL publica visible y seleccion rapida del sitio activo.
+- Wizard de creacion de sitio con nombre, slug publico, descripcion, SEO title, SEO description, keywords, imagen social y destino de publicacion antes de editar.
 - Editor drag-and-drop con bloques avanzados: `navbar`, `hero`, `text`, `features`, `gallery`, `faq`, `image`, `contactForm`, `cta`.
 - Edicion inline de contenido, links e items.
 - SEO por sitio: title, description, keywords, target de publicacion.
 - Undo/Redo en el estudio.
 - Versionado con snapshots restaurables.
-- Guardado de plantillas por usuario y plantillas globales de admin.
+- Plantillas administradas solo por `admin`; los usuarios pueden seleccionar plantillas existentes para crear o editar sus sitios.
 - Plantillas globales exactas importadas desde ThemeWagon y servidas con assets locales aislados en iframe: LabSpa, TimeZone, Executive, SpaceDynamic, Collab, FoodwaGon y Watch.
 - Al usar una plantilla HTML, el CMS crea una copia editable del HTML para cambiar textos y CSS sin modificar el template base.
 - Publicacion por entornos: `staging` y `production`.

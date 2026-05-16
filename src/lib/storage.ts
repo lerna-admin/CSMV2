@@ -72,7 +72,7 @@ export function getProjects(): SiteProject[] {
 }
 
 export function upsertProject(project: SiteProject): void {
-  const next = getProjects().filter((p) => p.ownerEmail !== project.ownerEmail).concat(project);
+  const next = getProjects().filter((p) => p.id !== project.id).concat(project);
   save(KEYS.projects, next);
 }
 

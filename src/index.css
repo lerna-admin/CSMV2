@@ -132,6 +132,9 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .studio-nav button:nth-of-type(1)::before { content: "▦"; width: 1.35rem; color: #7dd3fc; }
 .studio-nav button:nth-of-type(2)::before { content: "✥"; width: 1.35rem; color: #fbbf24; }
 .studio-nav button:nth-of-type(3)::before { content: "◈"; width: 1.35rem; color: #86efac; }
+.studio-nav button.nav-site::before { content: "▦"; width: 1.35rem; color: #7dd3fc; }
+.studio-nav button.nav-template::before { content: "✥"; width: 1.35rem; color: #fbbf24; }
+.studio-nav button.nav-admin::before { content: "◈"; width: 1.35rem; color: #86efac; }
 
 .studio-content {
   min-width: 0;
@@ -143,6 +146,8 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 
 .seo-panel,
 .create-site-panel,
+.site-library,
+.site-wizard,
 .admin-panel,
 .template-studio,
 .templates,
@@ -162,6 +167,8 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 }
 .seo-panel p,
 .create-site-panel p,
+.site-library p,
+.site-wizard p,
 .template-studio p,
 .theme-panel p {
   margin: 0 0 .75rem;
@@ -206,6 +213,106 @@ button:disabled { opacity: .5; cursor: not-allowed; }
   border-color: var(--blue);
   color: #fff;
 }
+.site-library {
+  display: grid;
+  gap: .75rem;
+}
+.site-library-head {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.site-library-head h3,
+.site-wizard h2 {
+  margin: 0 0 .35rem;
+}
+.site-library-head button,
+.wizard-actions button:last-child {
+  background: var(--blue);
+  border-color: var(--blue);
+  color: #fff;
+}
+.site-card-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: .65rem;
+}
+.site-card {
+  display: grid;
+  gap: .55rem;
+  padding: .75rem;
+  border: 1px solid #d8e0ec;
+  border-radius: 8px;
+  background: #fff;
+}
+.site-card.active {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 2px #006edc1f;
+}
+.site-card strong {
+  display: block;
+  margin-bottom: .12rem;
+}
+.site-card span {
+  color: var(--muted);
+  font-size: .8rem;
+}
+.site-card input {
+  font-size: .78rem;
+  color: #475569;
+}
+.site-card-actions {
+  display: flex;
+  gap: .4rem;
+  flex-wrap: wrap;
+}
+.site-wizard {
+  display: grid;
+  grid-template-columns: minmax(220px, .55fr) minmax(0, 1.45fr);
+  gap: 1rem;
+}
+.wizard-copy h2 {
+  font-size: clamp(1.7rem, 3vw, 3.4rem);
+  line-height: .95;
+  letter-spacing: -.06em;
+}
+.wizard-panel,
+.wizard-fields {
+  display: grid;
+  gap: .75rem;
+}
+.wizard-steps {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: .4rem;
+}
+.wizard-steps button {
+  min-height: 42px;
+  background: #f8fafc;
+  border: 1px solid #d5deea;
+  color: #334155;
+  font-weight: 800;
+}
+.wizard-steps button.active {
+  background: var(--wp);
+  border-color: var(--wp);
+  color: #fff;
+}
+.wizard-fields label,
+.seo-grid label {
+  display: grid;
+  gap: .3rem;
+  font-size: .78rem;
+  font-weight: 800;
+  color: #374151;
+}
+.wizard-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: .45rem;
+  flex-wrap: wrap;
+}
 .actions {
   display: flex;
   gap: .45rem;
@@ -232,6 +339,9 @@ button:disabled { opacity: .5; cursor: not-allowed; }
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: .55rem;
+}
+.seo-grid-wide {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
 .theme-panel {
   display: grid;
@@ -672,6 +782,10 @@ button:disabled { opacity: .5; cursor: not-allowed; }
   border-radius: 7px;
   background: #fff;
 }
+.template-card.active {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 2px #006edc1f;
+}
 .template-card strong { min-height: 2.4rem; }
 .template-preview {
   display: grid;
@@ -866,6 +980,7 @@ button:disabled { opacity: .5; cursor: not-allowed; }
   .seo-grid,
   .charts-grid,
   .theme-panel,
+  .site-wizard,
   .create-site-panel { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .theme-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .template-studio-grid { grid-template-columns: 1fr; }
@@ -891,10 +1006,17 @@ button:disabled { opacity: .5; cursor: not-allowed; }
   .seo-grid,
   .charts-grid,
   .theme-panel,
+  .site-wizard,
   .create-site-panel,
   .theme-grid,
   .html-node-panel .inline-fields,
   .inline-fields,
   .template-head { grid-template-columns: 1fr; }
+  .site-library-head,
+  .wizard-actions { align-items: stretch; flex-direction: column; }
+  .site-library-head button,
+  .wizard-actions button { width: 100%; }
+  .site-card-list,
+  .wizard-steps { grid-template-columns: 1fr; }
   .builder-canvas { padding: .7rem; }
 }
