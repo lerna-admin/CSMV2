@@ -213,6 +213,7 @@ export default function AppShell() {
           ? await materializeTemplateBlocks(selectedWizardTemplate.blocks)
           : cloneBlocksWithNewIds(selectedWizardTemplate.blocks)
         : [];
+      const siteBlocks = blocks.map((block) => ({ ...block, sourceTemplateId: selectedWizardTemplate?.id || block.sourceTemplateId, sourceBlockType: block.sourceBlockType || block.type }));
       const keywords = siteDraft.keywords.split(',').map((keyword) => keyword.trim()).filter(Boolean);
       const next: SiteProject = {
         id: crypto.randomUUID(),
@@ -223,7 +224,7 @@ export default function AppShell() {
         status: 'draft',
         publishedAt: undefined,
         updatedAt: new Date().toISOString(),
-        blocks,
+        blocks: siteBlocks,
         seo: {
           title: siteDraft.seoTitle.trim() || title,
           description: siteDraft.seoDescription.trim() || description,
@@ -302,7 +303,8 @@ export default function AppShell() {
       const blocks = template.blocks.some((block) => block.type === 'html')
         ? await materializeTemplateBlocks(template.blocks)
         : cloneBlocksWithNewIds(template.blocks);
-      persist({ ...project, blocks, theme: template.theme || project.theme, templateId: template.id, updatedAt: new Date().toISOString() });
+      const siteBlocks = blocks.map((block) => ({ ...block, sourceTemplateId: template.id, sourceBlockType: block.sourceBlockType || block.type }));
+      persist({ ...project, blocks: siteBlocks, theme: template.theme || project.theme, templateId: template.id, updatedAt: new Date().toISOString() });
       setPreviewTemplateId('');
     } finally {
       setTemplateLoadingId('');
@@ -318,7 +320,7 @@ export default function AppShell() {
         : cloneBlocksWithNewIds(template.blocks);
       setEditingTemplateId('');
       setTemplateName(`${template.name} copia`);
-      setTemplateBlocks(blocks);
+      setTemplateBlocks(blocks.map((block) => ({ ...block, sourceTemplateId: template.id, sourceBlockType: block.sourceBlockType || block.type })));
       setPreviewTemplateId('');
       navigate('/app/templates');
     } finally {

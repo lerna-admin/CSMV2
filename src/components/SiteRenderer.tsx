@@ -75,29 +75,61 @@ function isDirectVideoFile(source?: string): boolean {
 
 function CarouselBlock({ block }: { block: SiteBlock }) {
   const slides = parseCarouselSlides(block.items);
+  const settings = {
+    autoplay: block.settings?.autoplay ?? false,
+    intervalMs: Math.max(1000, Number(block.settings?.intervalMs || 5000)),
+    transition: block.settings?.transition || 'slide',
+    showArrows: block.settings?.showArrows ?? true,
+    showDots: block.settings?.showDots ?? true,
+    prevLabel: block.settings?.prevLabel || 'Anterior',
+    nextLabel: block.settings?.nextLabel || 'Siguiente',
+    imageFit: block.settings?.imageFit || 'cover',
+    overlayOpacity: block.settings?.overlayOpacity ?? 0.55,
+  };
   const [activeIndex, setActiveIndex] = useState(0);
 
   useEffect(() => {
     setActiveIndex(0);
   }, [block.id, block.items]);
 
+  useEffect(() => {
+    if (!settings.autoplay || slides.length < 2) return undefined;
+    const timer = window.setInterval(() => {
+      setActiveIndex((current) => (current + 1) % slides.length);
+    }, settings.intervalMs);
+    return () => window.clearInterval(timer);
+  }, [settings.autoplay, settings.intervalMs, slides.length]);
+
   if (!slides.length) return null;
   const slide = slides[activeIndex] || slides[0];
 
   return (
-    <div className="public-carousel">
+    <div className={`public-carousel public-carousel-${settings.transition}`}>
       <div className="public-carousel-stage">
-        {slide.image && <img src={resolveUploadedAssetUrl(slide.image)} alt={slide.title || block.title} />}
-        <div className="public-carousel-copy">
+        {slide.image && <img src={resolveUploadedAssetUrl(slide.image)} alt={slide.title || block.title} style={{ objectFit: settings.imageFit }} />}
+        <div className="public-carousel-copy" style={{ background: `linear-gradient(180deg, transparent 0%, rgba(15, 23, 42, ${settings.overlayOpacity}) 100%)` }}>
           <strong>{slide.title || block.title}</strong>
           {slide.text && <p>{slide.text}</p>}
         </div>
       </div>
-      {slides.length > 1 && (
+      {slides.length > 1 && settings.showArrows && (
         <div className="public-carousel-nav">
-          <button type="button" onClick={() => setActiveIndex((current) => (current - 1 + slides.length) % slides.length)}>Anterior</button>
+          <button type="button" onClick={() => setActiveIndex((current) => (current - 1 + slides.length) % slides.length)}>{settings.prevLabel}</button>
           <span>{activeIndex + 1} / {slides.length}</span>
-          <button type="button" onClick={() => setActiveIndex((current) => (current + 1) % slides.length)}>Siguiente</button>
+          <button type="button" onClick={() => setActiveIndex((current) => (current + 1) % slides.length)}>{settings.nextLabel}</button>
+        </div>
+      )}
+      {slides.length > 1 && settings.showDots && (
+        <div className="public-carousel-dots">
+          {slides.map((_, index) => (
+            <button
+              key={`${block.id}-dot-${index}`}
+              type="button"
+              className={index === activeIndex ? 'active' : ''}
+              aria-label={`Ir al slide ${index + 1}`}
+              onClick={() => setActiveIndex(index)}
+            />
+          ))}
         </div>
       )}
     </div>
@@ -418,7 +450,17 @@ export default function SiteRenderer({ blocks, siteSlug = 'preview', theme, onLe
         <h3>{block.title}</h3>
         <p>{block.content}</p>
         {block.type === 'navbar' && <nav className="nav-inline">{(block.items || []).map((item) => <a key={item} href="#">{item}</a>)}</nav>}
-        {block.type === 'gallery' && <div className="gallery-grid">{(block.items || []).map((img) => <img key={img} src={resolveUploadedAssetUrl(img)} alt="gallery" />)}</div>}
+        {block.type === 'gallery' && (
+          <div
+            className="gallery-grid"
+            style={{
+              gridTemplateColumns: `repeat(${Math.min(6, Math.max(1, Number(block.settings?.galleryColumns || 3)))}, minmax(0, 1fr))`,
+              gap: `${Math.max(0, Number(block.settings?.gap || 12))}px`,
+            }}
+          >
+            {(block.items || []).map((img) => <img key={img} src={resolveUploadedAssetUrl(img)} alt="gallery" style={{ objectFit: block.settings?.imageFit || 'cover' }} />)}
+          </div>
+        )}
         {block.type === 'faq' && <div>{(block.items || []).map((qa) => <p key={qa}>{qa}</p>)}</div>}
         {block.type === 'carousel' && <CarouselBlock block={block} />}
         {block.type === 'table' && (
@@ -441,8 +483,16 @@ export default function SiteRenderer({ blocks, siteSlug = 'preview', theme, onLe
         {block.type === 'video' && <VideoBlock block={block} />}
         {block.type === 'pricing' && <PricingBlock block={block} />}
         {block.type === 'testimonials' && <TestimonialsBlock block={block} />}
-        {block.image && block.type !== 'video' && <img src={resolveUploadedAssetUrl(block.image)} alt={block.title} />}
-        {block.buttonText && <a href={block.buttonUrl || '#'}>{block.buttonText}</a>}
+        {block.image && block.type !== 'video' && (
+          block.settings?.linkUrl ? (
+            <a href={block.settings.linkUrl} target={block.settings.openInNewTab ? '_blank' : undefined} rel={block.settings.openInNewTab ? 'noreferrer noopener' : undefined}>
+              <img src={resolveUploadedAssetUrl(block.image)} alt={block.title} style={{ objectFit: block.settings?.imageFit || 'cover' }} />
+            </a>
+          ) : (
+            <img src={resolveUploadedAssetUrl(block.image)} alt={block.title} style={{ objectFit: block.settings?.imageFit || 'cover' }} />
+          )
+        )}
+        {block.buttonText && <a href={block.settings?.linkUrl || block.buttonUrl || '#'} target={block.settings?.openInNewTab ? '_blank' : undefined} rel={block.settings?.openInNewTab ? 'noreferrer noopener' : undefined}>{block.buttonText}</a>}
         {block.type === 'contactForm' && (
           <form className="lead-form" onSubmit={submitLead}>
             <input name="name" placeholder="Nombre" required />

@@ -23,20 +23,20 @@ const sectionPalette: PaletteItem = {
 
 const elementPalette: PaletteItem[] = [
   { type: 'navbar', title: 'Navbar', content: 'Inicio|Servicios|Contacto', items: ['Inicio', 'Servicios', 'Contacto'] },
-  { type: 'hero', title: 'Hero', content: 'Construye sin limites', buttonText: 'Comenzar', buttonUrl: '#' },
+  { type: 'hero', title: 'Hero', content: 'Construye sin limites', buttonText: 'Comenzar', buttonUrl: '#', settings: { linkUrl: '#', openInNewTab: false } },
   { type: 'text', title: 'Texto', content: 'Bloque de texto editable' },
   { type: 'features', title: 'Beneficios', content: 'Rapido, seguro, flexible', items: ['Sin backend', 'Publicacion GitHub', 'Plantillas'] },
-  { type: 'gallery', title: 'Galeria', content: 'Muestra tus trabajos', items: ['https://picsum.photos/500/300', 'https://picsum.photos/501/300'] },
+  { type: 'gallery', title: 'Galeria', content: 'Muestra tus trabajos', items: ['https://picsum.photos/500/300', 'https://picsum.photos/501/300'], settings: { galleryColumns: 3, gap: 12, imageFit: 'cover' } },
   { type: 'faq', title: 'FAQ', content: 'Preguntas frecuentes', items: ['Que incluye?:Editor visual completo', 'Como publico?:Con GitHub Actions'] },
-  { type: 'carousel', title: 'Carrusel', content: 'Slides principales del sitio', items: ['https://picsum.photos/1200/700?1|Bienestar premium|Experiencias pensadas para convertir', 'https://picsum.photos/1200/700?2|Resultados visibles|Campanas visuales con narrativa clara'] },
+  { type: 'carousel', title: 'Carrusel', content: 'Slides principales del sitio', items: ['https://picsum.photos/1200/700?1|Bienestar premium|Experiencias pensadas para convertir', 'https://picsum.photos/1200/700?2|Resultados visibles|Campanas visuales con narrativa clara'], settings: { autoplay: false, intervalMs: 5000, transition: 'slide', showArrows: true, showDots: true, prevLabel: 'Anterior', nextLabel: 'Siguiente', imageFit: 'cover', overlayOpacity: 0.55 } },
   { type: 'table', title: 'Tabla', content: 'Comparativa de servicios y precios', items: ['Servicio|Duracion|Precio', 'Masaje relajante|60 min|$80', 'Facial premium|45 min|$65'] },
   { type: 'pricing', title: 'Precios', content: 'Planes comerciales o paquetes destacados', items: ['Starter|$19/mes|1 sitio,Soporte base,Analitica esencial', 'Growth|$49/mes|3 sitios,SEO avanzado,Automatizaciones'] },
   { type: 'testimonials', title: 'Testimonios', content: 'Prueba social para aumentar conversion', items: ['Ana Torres|CEO de Wellness|Duplicamos conversiones en dos semanas', 'Luis Mejia|Founder de Studio Norte|El editor nos ahorro horas cada semana'] },
-  { type: 'image', title: 'Imagen', content: 'Hero visual', image: 'https://picsum.photos/1200/700' },
+  { type: 'image', title: 'Imagen', content: 'Hero visual', image: 'https://picsum.photos/1200/700', settings: { imageFit: 'cover', linkUrl: '', openInNewTab: false } },
   { type: 'video', title: 'Video', content: 'Presentacion del producto o demo principal', embedUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', image: 'https://picsum.photos/1200/700?video' },
   { type: 'html', title: 'HTML embebido', content: 'Iframe o HTML completo', embedUrl: `${import.meta.env.BASE_URL}templates/labspa/index.html` },
   { type: 'contactForm', title: 'Formulario', content: 'Recibe leads desde tu landing' },
-  { type: 'cta', title: 'Llamado a la accion', content: 'Convierte visitas en clientes', buttonText: 'Contactar', buttonUrl: '#' },
+  { type: 'cta', title: 'Llamado a la accion', content: 'Convierte visitas en clientes', buttonText: 'Contactar', buttonUrl: '#', settings: { linkUrl: '#', openInNewTab: false } },
 ];
 
 const stylePresets = [
@@ -58,12 +58,60 @@ function toBuilderShape(blocks: SiteBlock[]): SiteBlock[] {
   return next;
 }
 
+function withBlockDefaults(block: SiteBlock): SiteBlock {
+  const current = block.settings || {};
+  if (block.type === 'carousel') {
+    return {
+      ...block,
+      sourceBlockType: block.sourceBlockType || block.type,
+      settings: {
+        autoplay: current.autoplay ?? false,
+        intervalMs: current.intervalMs ?? 5000,
+        transition: current.transition || 'slide',
+        showArrows: current.showArrows ?? true,
+        showDots: current.showDots ?? true,
+        prevLabel: current.prevLabel || 'Anterior',
+        nextLabel: current.nextLabel || 'Siguiente',
+        imageFit: current.imageFit || 'cover',
+        overlayOpacity: current.overlayOpacity ?? 0.55,
+      },
+    };
+  }
+  if (block.type === 'gallery') {
+    return {
+      ...block,
+      sourceBlockType: block.sourceBlockType || block.type,
+      settings: {
+        galleryColumns: current.galleryColumns ?? 3,
+        gap: current.gap ?? 12,
+        imageFit: current.imageFit || 'cover',
+      },
+    };
+  }
+  if (block.type === 'image' || block.type === 'cta' || block.type === 'hero') {
+    return {
+      ...block,
+      sourceBlockType: block.sourceBlockType || block.type,
+      settings: {
+        imageFit: current.imageFit || 'cover',
+        linkUrl: current.linkUrl ?? block.buttonUrl ?? '',
+        openInNewTab: current.openInNewTab ?? false,
+      },
+    };
+  }
+  return {
+    ...block,
+    sourceBlockType: block.sourceBlockType || block.type,
+    settings: current,
+  };
+}
+
 function palettePayload(kind: 'section' | 'element', item?: PaletteItem): string {
   return JSON.stringify({ kind, item });
 }
 
 function updateBlock(blocks: SiteBlock[], id: string, patch: Partial<SiteBlock>): SiteBlock[] {
-  return blocks.map((b) => (b.id === id ? { ...b, ...patch } : b));
+  return blocks.map((b) => (b.id === id ? withBlockDefaults({ ...b, ...patch }) : b));
 }
 
 function parseCssText(css?: string): React.CSSProperties | undefined {
@@ -344,6 +392,12 @@ function parseTestimonials(items?: string[]): Array<{ author: string; role: stri
     .filter((item) => item.author || item.role || item.quote);
 }
 
+function serializeCarouselSlides(slides: Array<{ image: string; title: string; text: string }>): string[] {
+  return slides
+    .map((slide) => [slide.image.trim(), slide.title.trim(), slide.text.trim()].join('|'))
+    .filter((slide) => slide.replace(/\|/g, '').trim());
+}
+
 function extractFunctionNames(js: string): string[] {
   const names = new Set<string>();
   const patterns = [
@@ -601,7 +655,7 @@ export default function Builder({ blocks, onChange, theme, onUploadAsset }: Prop
   const [selectedId, setSelectedId] = useState<string>('');
   const [device, setDevice] = useState<DeviceMode>('desktop');
   const [uploadingAsset, setUploadingAsset] = useState(false);
-  const normalized = useMemo(() => toBuilderShape(blocks), [blocks]);
+  const normalized = useMemo(() => toBuilderShape(blocks).map(withBlockDefaults), [blocks]);
   const sections = normalized.filter((b) => b.nodeType === 'section' || b.type === 'section');
   const selected = normalized.find((b) => b.id === selectedId) || null;
   const pages = Array.from(new Map(sections.map((s) => [s.pageId || 'home', s.pageName || 'Home'])).entries()).map(([id, name]) => ({ id, name }));
@@ -610,6 +664,11 @@ export default function Builder({ blocks, onChange, theme, onUploadAsset }: Prop
 
   function commit(next: SiteBlock[]) {
     onChange(next);
+  }
+
+  function patchSelectedSettings(patch: Record<string, string | number | boolean>) {
+    if (!selected) return;
+    commit(updateBlock(normalized, selected.id, { settings: { ...(selected.settings || {}), ...patch } }));
   }
 
   function requestAssetUpload(onUrl: (url: string) => void, hint?: string) {
@@ -683,13 +742,15 @@ export default function Builder({ blocks, onChange, theme, onUploadAsset }: Prop
     const element: SiteBlock = {
       ...data.item,
       id: crypto.randomUUID(),
+      sourceBlockType: data.item.type,
       nodeType: 'element',
       parentId: sectionId,
       pageId: target?.pageId || 'home',
       pageName: target?.pageName || 'Home',
     };
-    setSelectedId(element.id);
-    commit(normalized.concat(element));
+    const nextElement = withBlockDefaults(element);
+    setSelectedId(nextElement.id);
+    commit(normalized.concat(nextElement));
   }
 
   function addPage() {
@@ -898,6 +959,11 @@ export default function Builder({ blocks, onChange, theme, onUploadAsset }: Prop
         {selected && (
           <div className="inspector-fields">
             <label>Titulo<input value={selected.title} onChange={(e) => commit(updateBlock(normalized, selected.id, { title: e.target.value }))} /></label>
+            <div className="component-instance-note">
+              <strong>Instancia editable</strong>
+              <span>Este bloque es una copia del componente base. Los cambios aqui no modifican la plantilla original ni otros sitios.</span>
+              <span>Base: {selected.sourceBlockType || selected.type}{selected.sourceTemplateId ? ` · plantilla ${selected.sourceTemplateId}` : ''}</span>
+            </div>
             <label>Contenido<textarea value={selected.content} onChange={(e) => commit(updateBlock(normalized, selected.id, { content: e.target.value }))} /></label>
             <div className="inline-fields">
               <label>Pagina<input value={selected.pageName || 'Home'} onChange={(e) => commit(updateBlock(normalized, selected.id, { pageName: e.target.value, pageId: e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, '-') }))} /></label>
@@ -909,21 +975,109 @@ export default function Builder({ blocks, onChange, theme, onUploadAsset }: Prop
                 <label>URL<input value={selected.buttonUrl || ''} onChange={(e) => commit(updateBlock(normalized, selected.id, { buttonUrl: e.target.value }))} /></label>
               </div>
             )}
+            {(selected.type === 'cta' || selected.type === 'hero') && (
+              <div className="inline-fields">
+                <label>Target<select value={selected.settings?.openInNewTab ? '_blank' : '_self'} onChange={(e) => patchSelectedSettings({ openInNewTab: e.target.value === '_blank' })}>
+                  <option value="_self">Misma pestaña</option>
+                  <option value="_blank">Nueva pestaña</option>
+                </select></label>
+                <label>Link del componente<input value={selected.settings?.linkUrl || selected.buttonUrl || ''} onChange={(e) => patchSelectedSettings({ linkUrl: e.target.value })} placeholder="https://..." /></label>
+              </div>
+            )}
             {(selected.type === 'gallery' || selected.type === 'faq' || selected.type === 'features' || selected.type === 'navbar') && (
               <label>Items<textarea value={(selected.items || []).join('\n')} onChange={(e) => commit(updateBlock(normalized, selected.id, { items: e.target.value.split('\n').filter(Boolean) }))} /></label>
             )}
             {selected.type === 'gallery' && (
-              <button
-                type="button"
-                disabled={!onUploadAsset || uploadingAsset}
-                onClick={() => requestAssetUpload((url) => commit(updateBlock(normalized, selected.id, { items: [...(selected.items || []), url] })), selected.title)}
-              >
-                {uploadingAsset ? 'Subiendo imagen...' : 'Subir imagen a galeria'}
-              </button>
+              <>
+                <div className="inline-fields">
+                  <label>Columnas<input type="number" min={1} max={6} value={selected.settings?.galleryColumns || 3} onChange={(e) => patchSelectedSettings({ galleryColumns: Number(e.target.value) || 3 })} /></label>
+                  <label>Separacion<input type="number" min={0} max={48} value={selected.settings?.gap || 12} onChange={(e) => patchSelectedSettings({ gap: Number(e.target.value) || 0 })} /></label>
+                </div>
+                <label>Ajuste imagen<select value={selected.settings?.imageFit || 'cover'} onChange={(e) => patchSelectedSettings({ imageFit: e.target.value })}>
+                  <option value="cover">cover</option>
+                  <option value="contain">contain</option>
+                </select></label>
+                <button
+                  type="button"
+                  disabled={!onUploadAsset || uploadingAsset}
+                  onClick={() => requestAssetUpload((url) => commit(updateBlock(normalized, selected.id, { items: [...(selected.items || []), url] })), selected.title)}
+                >
+                  {uploadingAsset ? 'Subiendo imagen...' : 'Subir imagen a galeria'}
+                </button>
+              </>
             )}
             {selected.type === 'carousel' && (
               <>
                 <label>Slides del carrusel<textarea value={(selected.items || []).join('\n')} onChange={(e) => commit(updateBlock(normalized, selected.id, { items: e.target.value.split('\n').filter(Boolean) }))} placeholder={'https://.../slide-1.jpg|Titulo 1|Texto 1\nhttps://.../slide-2.jpg|Titulo 2|Texto 2'} /></label>
+                <div className="inline-fields">
+                  <label>Efecto<select value={selected.settings?.transition || 'slide'} onChange={(e) => patchSelectedSettings({ transition: e.target.value })}>
+                    <option value="slide">slide</option>
+                    <option value="fade">fade</option>
+                    <option value="zoom">zoom</option>
+                  </select></label>
+                  <label>Ajuste imagen<select value={selected.settings?.imageFit || 'cover'} onChange={(e) => patchSelectedSettings({ imageFit: e.target.value })}>
+                    <option value="cover">cover</option>
+                    <option value="contain">contain</option>
+                  </select></label>
+                </div>
+                <div className="inline-fields">
+                  <label>Mostrar flechas<select value={selected.settings?.showArrows === false ? 'no' : 'si'} onChange={(e) => patchSelectedSettings({ showArrows: e.target.value === 'si' })}>
+                    <option value="si">si</option>
+                    <option value="no">no</option>
+                  </select></label>
+                  <label>Mostrar puntos<select value={selected.settings?.showDots === false ? 'no' : 'si'} onChange={(e) => patchSelectedSettings({ showDots: e.target.value === 'si' })}>
+                    <option value="si">si</option>
+                    <option value="no">no</option>
+                  </select></label>
+                </div>
+                <div className="inline-fields">
+                  <label>Etiqueta anterior<input value={selected.settings?.prevLabel || 'Anterior'} onChange={(e) => patchSelectedSettings({ prevLabel: e.target.value })} /></label>
+                  <label>Etiqueta siguiente<input value={selected.settings?.nextLabel || 'Siguiente'} onChange={(e) => patchSelectedSettings({ nextLabel: e.target.value })} /></label>
+                </div>
+                <div className="inline-fields">
+                  <label>Autoplay<select value={selected.settings?.autoplay ? 'si' : 'no'} onChange={(e) => patchSelectedSettings({ autoplay: e.target.value === 'si' })}>
+                    <option value="no">no</option>
+                    <option value="si">si</option>
+                  </select></label>
+                  <label>Intervalo ms<input type="number" min={1000} step={250} value={selected.settings?.intervalMs || 5000} onChange={(e) => patchSelectedSettings({ intervalMs: Number(e.target.value) || 5000 })} /></label>
+                </div>
+                <label>Opacidad overlay<input type="range" min={0} max={0.95} step={0.05} value={selected.settings?.overlayOpacity ?? 0.55} onChange={(e) => patchSelectedSettings({ overlayOpacity: Number(e.target.value) })} /></label>
+                <div className="component-list-editor">
+                  {parseCarouselSlides(selected.items).map((slide, index, slides) => (
+                    <article key={`${selected.id}-slide-editor-${index}`} className="component-item-card">
+                      <strong>Slide {index + 1}</strong>
+                      <label>Imagen<input value={slide.image} onChange={(e) => {
+                        const nextSlides = slides.slice();
+                        nextSlides[index] = { ...slide, image: e.target.value };
+                        commit(updateBlock(normalized, selected.id, { items: serializeCarouselSlides(nextSlides) }));
+                      }} /></label>
+                      <label>Titulo<input value={slide.title} onChange={(e) => {
+                        const nextSlides = slides.slice();
+                        nextSlides[index] = { ...slide, title: e.target.value };
+                        commit(updateBlock(normalized, selected.id, { items: serializeCarouselSlides(nextSlides) }));
+                      }} /></label>
+                      <label>Texto<textarea value={slide.text} onChange={(e) => {
+                        const nextSlides = slides.slice();
+                        nextSlides[index] = { ...slide, text: e.target.value };
+                        commit(updateBlock(normalized, selected.id, { items: serializeCarouselSlides(nextSlides) }));
+                      }} /></label>
+                      <div className="mini-actions">
+                        <button type="button" disabled={index === 0} onClick={() => {
+                          const nextSlides = slides.slice();
+                          [nextSlides[index - 1], nextSlides[index]] = [nextSlides[index], nextSlides[index - 1]];
+                          commit(updateBlock(normalized, selected.id, { items: serializeCarouselSlides(nextSlides) }));
+                        }}><ArrowUp size={15} /></button>
+                        <button type="button" disabled={index === slides.length - 1} onClick={() => {
+                          const nextSlides = slides.slice();
+                          [nextSlides[index + 1], nextSlides[index]] = [nextSlides[index], nextSlides[index + 1]];
+                          commit(updateBlock(normalized, selected.id, { items: serializeCarouselSlides(nextSlides) }));
+                        }}><ArrowDown size={15} /></button>
+                        <button type="button" onClick={() => commit(updateBlock(normalized, selected.id, { items: serializeCarouselSlides(slides.filter((_, slideIndex) => slideIndex !== index)) }))}><Trash2 size={15} /></button>
+                      </div>
+                    </article>
+                  ))}
+                  <button type="button" onClick={() => commit(updateBlock(normalized, selected.id, { items: [...(selected.items || []), '|Nuevo slide|Describe este slide'] }))}>Agregar slide vacio</button>
+                </div>
                 <button
                   type="button"
                   disabled={!onUploadAsset || uploadingAsset}
@@ -936,6 +1090,17 @@ export default function Builder({ blocks, onChange, theme, onUploadAsset }: Prop
             {selected.type === 'image' && (
               <>
                 <label>Imagen<input value={selected.image || ''} onChange={(e) => commit(updateBlock(normalized, selected.id, { image: e.target.value }))} /></label>
+                <div className="inline-fields">
+                  <label>Ajuste imagen<select value={selected.settings?.imageFit || 'cover'} onChange={(e) => patchSelectedSettings({ imageFit: e.target.value })}>
+                    <option value="cover">cover</option>
+                    <option value="contain">contain</option>
+                  </select></label>
+                  <label>Target<select value={selected.settings?.openInNewTab ? '_blank' : '_self'} onChange={(e) => patchSelectedSettings({ openInNewTab: e.target.value === '_blank' })}>
+                    <option value="_self">Misma pestaña</option>
+                    <option value="_blank">Nueva pestaña</option>
+                  </select></label>
+                </div>
+                <label>URL al hacer click<input value={selected.settings?.linkUrl || ''} onChange={(e) => patchSelectedSettings({ linkUrl: e.target.value })} placeholder="https://..." /></label>
                 <button
                   type="button"
                   disabled={!onUploadAsset || uploadingAsset}

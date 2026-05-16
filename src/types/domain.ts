@@ -26,10 +26,30 @@ export type PlatformSettings = {
 
 export type BlockType = 'section' | 'hero' | 'text' | 'image' | 'cta' | 'features' | 'navbar' | 'gallery' | 'faq' | 'contactForm' | 'html' | 'table' | 'carousel' | 'video' | 'pricing' | 'testimonials';
 export type NodeType = 'section' | 'element';
+export type CarouselTransition = 'slide' | 'fade' | 'zoom';
+export type ImageFit = 'cover' | 'contain';
+
+export type BlockSettings = {
+  autoplay?: boolean;
+  intervalMs?: number;
+  transition?: CarouselTransition;
+  showArrows?: boolean;
+  showDots?: boolean;
+  prevLabel?: string;
+  nextLabel?: string;
+  imageFit?: ImageFit;
+  overlayOpacity?: number;
+  galleryColumns?: number;
+  gap?: number;
+  linkUrl?: string;
+  openInNewTab?: boolean;
+};
 
 export type SiteBlock = {
   id: string;
   type: BlockType;
+  sourceBlockType?: BlockType;
+  sourceTemplateId?: string;
   nodeType?: NodeType;
   parentId?: string;
   pageId?: string;
@@ -49,6 +69,7 @@ export type SiteBlock = {
   buttonText?: string;
   buttonUrl?: string;
   items?: string[];
+  settings?: BlockSettings;
 };
 
 export type SeoConfig = {
