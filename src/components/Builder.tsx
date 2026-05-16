@@ -1,3 +1,5 @@
+import { Copy, Eye, Layers, Monitor, Palette, Plus, Smartphone, Tablet, Trash2 } from 'lucide-react';
+import { useMemo, useState } from 'react';
 import type { SiteBlock } from '../types/domain';
 
 type Props = {
@@ -6,15 +8,17 @@ type Props = {
 };
 
 type PaletteItem = Omit<SiteBlock, 'id' | 'parentId' | 'nodeType'>;
+type DeviceMode = 'desktop' | 'tablet' | 'mobile';
 
 const sectionPalette: PaletteItem = {
   type: 'section',
   title: 'Nueva seccion',
-  content: 'Contenedor principal para elementos',
+  content: 'Contenedor principal',
+  customClass: 'page',
 };
 
 const elementPalette: PaletteItem[] = [
-  { type: 'navbar', title: 'Navbar', content: 'Inicio|Servicios|Contacto' },
+  { type: 'navbar', title: 'Navbar', content: 'Inicio|Servicios|Contacto', items: ['Inicio', 'Servicios', 'Contacto'] },
   { type: 'hero', title: 'Hero', content: 'Construye sin limites', buttonText: 'Comenzar', buttonUrl: '#' },
   { type: 'text', title: 'Texto', content: 'Bloque de texto editable' },
   { type: 'features', title: 'Beneficios', content: 'Rapido, seguro, flexible', items: ['Sin backend', 'Publicacion GitHub', 'Plantillas'] },
@@ -25,14 +29,21 @@ const elementPalette: PaletteItem[] = [
   { type: 'cta', title: 'Llamado a la accion', content: 'Convierte visitas en clientes', buttonText: 'Contactar', buttonUrl: '#' },
 ];
 
+const stylePresets = [
+  { name: 'Minimal', css: 'background:#ffffff;color:#151515;padding:48px 32px;border-radius:0;' },
+  { name: 'Editorial', css: 'background:#f8f1e7;color:#1f2937;padding:64px 40px;border-left:6px solid #d94f30;' },
+  { name: 'SaaS', css: 'background:#eef6ff;color:#0f172a;padding:56px 36px;border-radius:18px;box-shadow:0 24px 60px #0f172a1f;' },
+  { name: 'Bold', css: 'background:#111827;color:#ffffff;padding:64px 40px;border-radius:12px;' },
+];
+
 function toBuilderShape(blocks: SiteBlock[]): SiteBlock[] {
   const hasTree = blocks.some((b) => b.nodeType || b.type === 'section');
   if (hasTree) return blocks;
   const next: SiteBlock[] = [];
   for (const block of blocks) {
     const sectionId = crypto.randomUUID();
-    next.push({ id: sectionId, type: 'section', nodeType: 'section', title: `Seccion ${next.length + 1}`, content: '' });
-    next.push({ ...block, id: crypto.randomUUID(), parentId: sectionId, nodeType: 'element' });
+    next.push({ id: sectionId, type: 'section', nodeType: 'section', pageId: 'home', pageName: 'Home', customClass: 'page', title: `Seccion ${next.length + 1}`, content: '' });
+    next.push({ ...block, id: crypto.randomUUID(), parentId: sectionId, nodeType: 'element', pageId: 'home', pageName: 'Home' });
   }
   return next;
 }
@@ -45,19 +56,35 @@ function updateBlock(blocks: SiteBlock[], id: string, patch: Partial<SiteBlock>)
   return blocks.map((b) => (b.id === id ? { ...b, ...patch } : b));
 }
 
+function cloneWithChildren(blocks: SiteBlock[], source: SiteBlock): SiteBlock[] {
+  const newId = crypto.randomUUID();
+  const cloned = { ...source, id: newId, title: `${source.title} copia` };
+  if (source.nodeType !== 'section' && source.type !== 'section') return blocks.concat(cloned);
+  const children = blocks.filter((b) => b.parentId === source.id).map((child) => ({ ...child, id: crypto.randomUUID(), parentId: newId }));
+  return blocks.concat(cloned, ...children);
+}
+
 export default function Builder({ blocks, onChange }: Props) {
-  const normalized = toBuilderShape(blocks);
+  const [selectedId, setSelectedId] = useState<string>('');
+  const [device, setDevice] = useState<DeviceMode>('desktop');
+  const normalized = useMemo(() => toBuilderShape(blocks), [blocks]);
   const sections = normalized.filter((b) => b.nodeType === 'section' || b.type === 'section');
+  const selected = normalized.find((b) => b.id === selectedId) || null;
   const pages = Array.from(new Map(sections.map((s) => [s.pageId || 'home', s.pageName || 'Home'])).entries()).map(([id, name]) => ({ id, name }));
   const childrenBySection = new Map<string, SiteBlock[]>();
   for (const section of sections) childrenBySection.set(section.id, normalized.filter((b) => b.parentId === section.id));
 
-  function removeSection(sectionId: string) {
-    onChange(normalized.filter((b) => b.id !== sectionId && b.parentId !== sectionId));
+  function commit(next: SiteBlock[]) {
+    onChange(next);
   }
 
-  function removeElement(id: string) {
-    onChange(normalized.filter((b) => b.id !== id));
+  function removeBlock(id: string) {
+    const target = normalized.find((b) => b.id === id);
+    const next = target?.nodeType === 'section' || target?.type === 'section'
+      ? normalized.filter((b) => b.id !== id && b.parentId !== id)
+      : normalized.filter((b) => b.id !== id);
+    setSelectedId('');
+    commit(next);
   }
 
   function onDropBody(event: React.DragEvent<HTMLElement>) {
@@ -67,16 +94,14 @@ export default function Builder({ blocks, onChange }: Props) {
     const data = JSON.parse(raw) as { kind: 'section' | 'element'; item?: PaletteItem };
     if (data.kind !== 'section') return;
     const next: SiteBlock = {
+      ...sectionPalette,
       id: crypto.randomUUID(),
       nodeType: 'section',
-      type: 'section',
       pageId: 'home',
       pageName: 'Home',
-      customClass: 'page',
-      title: 'Nueva seccion',
-      content: 'Seccion arrastrada al body',
     };
-    onChange(normalized.concat(next));
+    setSelectedId(next.id);
+    commit(normalized.concat(next));
   }
 
   function onDropSection(event: React.DragEvent<HTMLElement>, sectionId: string) {
@@ -94,43 +119,41 @@ export default function Builder({ blocks, onChange }: Props) {
       pageId: target?.pageId || 'home',
       pageName: target?.pageName || 'Home',
     };
-    onChange(normalized.concat(element));
+    setSelectedId(element.id);
+    commit(normalized.concat(element));
+  }
+
+  function addPage() {
+    const pageName = prompt('Nombre de la nueva pagina') || '';
+    if (!pageName.trim()) return;
+    const pageId = pageName.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    const section: SiteBlock = {
+      id: crypto.randomUUID(),
+      nodeType: 'section',
+      type: 'section',
+      pageId,
+      pageName: pageName.trim(),
+      customClass: 'page',
+      title: pageName.trim(),
+      content: 'Nueva pagina SPA',
+    };
+    setSelectedId(section.id);
+    commit(normalized.concat(section));
   }
 
   return (
     <section className="builder-shell">
       <aside className="builder-sidebar">
-        <h3>Componentes</h3>
-        <p>Arrastra al canvas.</p>
+        <div className="builder-side-title"><Layers size={16} /> Componentes</div>
         <div
           className="palette-item"
           draggable
           onDragStart={(event) => event.dataTransfer.setData('application/csmv2-item', palettePayload('section', sectionPalette))}
         >
-          + Seccion
+          <Plus size={15} /> Seccion
         </div>
-        <button
-          type="button"
-          className="palette-item"
-          onClick={() => {
-            const pageName = prompt('Nombre de la nueva pagina (SPA)') || '';
-            if (!pageName.trim()) return;
-            const pageId = pageName.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-');
-            onChange(normalized.concat({
-              id: crypto.randomUUID(),
-              nodeType: 'section',
-              type: 'section',
-              pageId,
-              pageName: pageName.trim(),
-              customClass: 'page',
-              title: `Pagina ${pageName.trim()}`,
-              content: 'Nueva pagina SPA',
-            }));
-          }}
-        >
-          + Pagina
-        </button>
-        <div className="drop-empty">Paginas: {pages.map((p) => p.name).join(', ') || 'Home'}</div>
+        <button type="button" className="palette-item" onClick={addPage}><Plus size={15} /> Pagina SPA</button>
+        <div className="page-strip">{pages.map((p) => <span key={p.id}>{p.name}</span>)}</div>
         {elementPalette.map((item) => (
           <div
             key={item.type + item.title}
@@ -138,68 +161,101 @@ export default function Builder({ blocks, onChange }: Props) {
             draggable
             onDragStart={(event) => event.dataTransfer.setData('application/csmv2-item', palettePayload('element', item))}
           >
-            + {item.title}
+            <Plus size={15} /> {item.title}
           </div>
         ))}
       </aside>
 
-      <main className="builder-canvas" onDragOver={(event) => event.preventDefault()} onDrop={onDropBody}>
-        <header>
-          <strong>Canvas (body)</strong>
-          <span>Solo acepta secciones. Dentro de cada seccion puedes soltar elementos.</span>
+      <main className={`builder-canvas canvas-${device}`} onDragOver={(event) => event.preventDefault()} onDrop={onDropBody}>
+        <header className="canvas-toolbar">
+          <strong><Eye size={16} /> Canvas</strong>
+          <div className="device-switch">
+            <button type="button" className={device === 'desktop' ? 'active' : ''} onClick={() => setDevice('desktop')} title="Desktop"><Monitor size={16} /></button>
+            <button type="button" className={device === 'tablet' ? 'active' : ''} onClick={() => setDevice('tablet')} title="Tablet"><Tablet size={16} /></button>
+            <button type="button" className={device === 'mobile' ? 'active' : ''} onClick={() => setDevice('mobile')} title="Mobile"><Smartphone size={16} /></button>
+          </div>
         </header>
 
-        {sections.length === 0 && <div className="drop-empty">Arrastra una seccion aqui para iniciar.</div>}
+        <div className="page-frame">
+          {sections.length === 0 && <div className="drop-empty">Arrastra una seccion aqui.</div>}
 
-        {sections.map((section, index) => {
-          const items = childrenBySection.get(section.id) || [];
-          return (
-            <article key={section.id} className="canvas-section" onDragOver={(event) => event.preventDefault()} onDrop={(event) => onDropSection(event, section.id)}>
-              <div className="section-head">
-                <strong>Seccion {index + 1}</strong>
-                <button type="button" onClick={() => removeSection(section.id)}>Eliminar seccion</button>
-              </div>
-              <input value={section.title} onChange={(e) => onChange(updateBlock(normalized, section.id, { title: e.target.value }))} placeholder="Titulo de seccion" />
-              <textarea value={section.content} onChange={(e) => onChange(updateBlock(normalized, section.id, { content: e.target.value }))} placeholder="Descripcion corta" />
-              <div className="inline-fields">
-                <input value={section.pageName || 'Home'} onChange={(e) => onChange(updateBlock(normalized, section.id, { pageName: e.target.value, pageId: e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, '-') }))} placeholder="Nombre de pagina" />
-                <input value={section.customClass || 'page'} onChange={(e) => onChange(updateBlock(normalized, section.id, { customClass: e.target.value }))} placeholder="Clase CSS de seccion" />
-              </div>
+          {sections.map((section, index) => {
+            const items = childrenBySection.get(section.id) || [];
+            return (
+              <article
+                key={section.id}
+                className={`canvas-section ${selectedId === section.id ? 'selected' : ''}`}
+                style={section.customCss ? Object.fromEntries(section.customCss.split(';').map((rule) => rule.split(':').map((part) => part.trim())).filter((rule) => rule.length === 2)) : undefined}
+                onClick={(event) => { event.stopPropagation(); setSelectedId(section.id); }}
+                onDragOver={(event) => event.preventDefault()}
+                onDrop={(event) => onDropSection(event, section.id)}
+              >
+                <div className="section-head">
+                  <strong>Seccion {index + 1}: {section.title}</strong>
+                  <div className="mini-actions">
+                    <button type="button" onClick={(event) => { event.stopPropagation(); commit(cloneWithChildren(normalized, section)); }} title="Duplicar"><Copy size={15} /></button>
+                    <button type="button" onClick={(event) => { event.stopPropagation(); removeBlock(section.id); }} title="Eliminar"><Trash2 size={15} /></button>
+                  </div>
+                </div>
 
-              <div className="section-children">
-                {items.length === 0 && <div className="drop-empty">Arrastra elementos aqui.</div>}
-                {items.map((block) => (
-                  <article key={block.id} className="block-card">
-                    <header>
-                      <strong>{block.title}</strong>
-                      <button type="button" onClick={() => removeElement(block.id)}>Eliminar</button>
-                    </header>
-                    <input value={block.title} onChange={(e) => onChange(updateBlock(normalized, block.id, { title: e.target.value }))} placeholder="Titulo" />
-                    <textarea value={block.content} onChange={(e) => onChange(updateBlock(normalized, block.id, { content: e.target.value }))} placeholder="Contenido" />
-                    {(block.type === 'cta' || block.type === 'hero') && (
-                      <div className="inline-fields">
-                        <input value={block.buttonText || ''} onChange={(e) => onChange(updateBlock(normalized, block.id, { buttonText: e.target.value }))} placeholder="Texto boton" />
-                        <input value={block.buttonUrl || ''} onChange={(e) => onChange(updateBlock(normalized, block.id, { buttonUrl: e.target.value }))} placeholder="URL boton" />
-                      </div>
-                    )}
-                    {(block.type === 'gallery' || block.type === 'faq' || block.type === 'features' || block.type === 'navbar') && (
-                      <textarea
-                        value={(block.items || []).join('\n')}
-                        onChange={(e) => onChange(updateBlock(normalized, block.id, { items: e.target.value.split('\n').filter(Boolean) }))}
-                        placeholder="Items, uno por linea"
-                      />
-                    )}
-                    {block.type === 'image' && <input value={block.image || ''} onChange={(e) => onChange(updateBlock(normalized, block.id, { image: e.target.value }))} placeholder="URL imagen" />}
-                    <input value={block.customClass || ''} onChange={(e) => onChange(updateBlock(normalized, block.id, { customClass: e.target.value }))} placeholder="Clase CSS personalizada" />
-                    <textarea value={block.customCss || ''} onChange={(e) => onChange(updateBlock(normalized, block.id, { customCss: e.target.value }))} placeholder="CSS para este bloque (opcional)" />
-                    <textarea value={block.customJs || ''} onChange={(e) => onChange(updateBlock(normalized, block.id, { customJs: e.target.value }))} placeholder="JS para este bloque (opcional)" />
-                  </article>
-                ))}
-              </div>
-            </article>
-          );
-        })}
+                <div className="section-children">
+                  {items.length === 0 && <div className="drop-empty">Arrastra elementos aqui.</div>}
+                  {items.map((block) => (
+                    <article
+                      key={block.id}
+                      className={`block-card ${selectedId === block.id ? 'selected' : ''}`}
+                      onClick={(event) => { event.stopPropagation(); setSelectedId(block.id); }}
+                    >
+                      <header>
+                        <strong>{block.title}</strong>
+                        <div className="mini-actions">
+                          <button type="button" onClick={(event) => { event.stopPropagation(); commit(cloneWithChildren(normalized, block)); }} title="Duplicar"><Copy size={15} /></button>
+                          <button type="button" onClick={(event) => { event.stopPropagation(); removeBlock(block.id); }} title="Eliminar"><Trash2 size={15} /></button>
+                        </div>
+                      </header>
+                      <p>{block.content}</p>
+                      {block.buttonText && <span className="fake-button">{block.buttonText}</span>}
+                      {block.type === 'gallery' && <div className="mini-gallery">{(block.items || []).slice(0, 3).map((img) => <img key={img} src={img} alt="" />)}</div>}
+                    </article>
+                  ))}
+                </div>
+              </article>
+            );
+          })}
+        </div>
       </main>
+
+      <aside className="inspector-panel">
+        <div className="builder-side-title"><Palette size={16} /> Inspector</div>
+        {!selected && <div className="empty-inspector">Selecciona una seccion o bloque.</div>}
+        {selected && (
+          <div className="inspector-fields">
+            <label>Titulo<input value={selected.title} onChange={(e) => commit(updateBlock(normalized, selected.id, { title: e.target.value }))} /></label>
+            <label>Contenido<textarea value={selected.content} onChange={(e) => commit(updateBlock(normalized, selected.id, { content: e.target.value }))} /></label>
+            <div className="inline-fields">
+              <label>Pagina<input value={selected.pageName || 'Home'} onChange={(e) => commit(updateBlock(normalized, selected.id, { pageName: e.target.value, pageId: e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, '-') }))} /></label>
+              <label>Clase<input value={selected.customClass || ''} onChange={(e) => commit(updateBlock(normalized, selected.id, { customClass: e.target.value }))} /></label>
+            </div>
+            {(selected.type === 'cta' || selected.type === 'hero') && (
+              <div className="inline-fields">
+                <label>Boton<input value={selected.buttonText || ''} onChange={(e) => commit(updateBlock(normalized, selected.id, { buttonText: e.target.value }))} /></label>
+                <label>URL<input value={selected.buttonUrl || ''} onChange={(e) => commit(updateBlock(normalized, selected.id, { buttonUrl: e.target.value }))} /></label>
+              </div>
+            )}
+            {(selected.type === 'gallery' || selected.type === 'faq' || selected.type === 'features' || selected.type === 'navbar') && (
+              <label>Items<textarea value={(selected.items || []).join('\n')} onChange={(e) => commit(updateBlock(normalized, selected.id, { items: e.target.value.split('\n').filter(Boolean) }))} /></label>
+            )}
+            {selected.type === 'image' && <label>Imagen<input value={selected.image || ''} onChange={(e) => commit(updateBlock(normalized, selected.id, { image: e.target.value }))} /></label>}
+            <div className="style-presets">
+              {stylePresets.map((preset) => (
+                <button key={preset.name} type="button" onClick={() => commit(updateBlock(normalized, selected.id, { customCss: preset.css }))}>{preset.name}</button>
+              ))}
+            </div>
+            <label>CSS<textarea value={selected.customCss || ''} onChange={(e) => commit(updateBlock(normalized, selected.id, { customCss: e.target.value }))} /></label>
+            <label>JS<textarea value={selected.customJs || ''} onChange={(e) => commit(updateBlock(normalized, selected.id, { customJs: e.target.value }))} /></label>
+          </div>
+        )}
+      </aside>
     </section>
   );
 }
