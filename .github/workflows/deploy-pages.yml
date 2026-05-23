@@ -1,4 +1,4 @@
-name: Deploy CSMV2
+name: Deploy Lerna Studio
 
 on:
   push:
